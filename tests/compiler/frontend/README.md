@@ -724,3 +724,14 @@ actual declaration occurrences with registered roots. Use the native runners
 linked from `met-un2r`, require exit0 and empty stdout/stderr, and keep product
 APIs private. These diagnostics do not replace the public missing-import CLI
 controls or certify task completion by themselves.
+
+`test-discovery-membership.py --carrier PATH --out NEW_DIRECTORY` executes real
+check/AOT/ORC controls for shared membership admission. It creates single-cause
+source graphs, preserves the private failure channel and source fingerprints,
+and verifies legal root reuse and multiple-annotation aggregation as well as
+conflict rejection. It is a manual focused gate, not the complete normal suite.
+`DiscoveryMembershipMain.pw` is a private-root diagnostic appended to the actual
+Frontend module; it checks raw core refusals, source authority, both diagnostic
+origins and generation suppression. `DiscoveryMembershipFailureDomains.pw` is
+a standalone service probe for retained failed-session diagnostics. Their native
+snapshot commands/results are linked from issue met-iv6d's evidence.

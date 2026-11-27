@@ -62,7 +62,7 @@ use ./Ir only { CallParameterBinding, DefaultGeneratorRange, DefaultGeneratorOri
 pub use @Plew/Syntax only { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 pub use ./Ir only { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticValueBlockTyping, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallKind, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, ViaWitness, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, FinalTryResolution, FinalAwaitResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, CallableSourceHead, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, StaticProofInstantiation, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 use ./Toml only { bytesEq }
-use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
+use ./Path only { resolveImport, extractSpan, dirPrefixLen, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath }
 use ./Manifest only { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 use ./Lock only { Lock }
 use ./Cache only { cacheRoot }
@@ -910,6 +910,21 @@ struct LoadedSourceTarget {
     val role: LoadedSourceRole
 }
 impl LoadedSourceTarget { factory }
+struct DiscoveryEntry {
+    val path: Array[U8]
+    val moduleId: U64
+    val role: LoadedSourceRole
+    val parent: Array[U8] = []
+    val offset: Optional[U64] = <Optional.None />
+    val automatic: Bool = false
+}
+impl DiscoveryEntry { factory }
+struct DiscoveryAdmission { val index: U64 val inserted: Bool }
+impl DiscoveryAdmission { factory }
+struct DiscoveryConflict { val requested: DiscoveryEntry val previous: DiscoveryEntry }
+impl DiscoveryConflict { factory }
+struct SourceDiscovery { mut val entries: Array[DiscoveryEntry] = [] }
+impl SourceDiscovery { factory }
 enum PartSyntaxCheck {
     Allowed
     RootOnlyUse(offset: U64)
@@ -2680,9 +2695,8 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Input /> location=<DiagnosticLocation.Unpositioned />
                 message="cannot open source file: " + rootPath /> />
         }
-        mut val pathBuf: Array[U8] = []
-        mut val loaded: Array[Bind] = []
-        // `loaded[i].fieldStart` carries each queued file's module id.
+        mut val discovery = <SourceDiscovery />
+        // The discovery entries own file identity, role and introducing edge.
         // `/…` absolute imports and `@dep` imports resolve PER PACKAGE: each loaded
         // file walks up to its own Plew.toml (findPkgDir/findSrcRoot) and parses its
         // own `[dependencies]` (loadManifestDeps), computed inside the loop below. So
@@ -2709,9 +2723,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         if synPath.count() == 0 {
             synPath = resolveGitDepImport(src: synName, pStart: 0, pLen: synName.count(), deps: genDeps, cacheRoot: cacheRootBytes, lock: entryLock)
         }
-        val es: U64 = pathBuf.count()
-        appendBytes(into: inout pathBuf, from: entryBytes)
-        loaded.append(<Bind nameStart=es nameLen=entryBytes.count() fieldStart=0 fieldLen=entryBytes.count() />)
+        discovery.initialRoot(path: entryBytes, moduleId: 0U64)
         // Force-load @Std/Lang FIRST: it is THE ambient module (spec/15) — it declares the
         // language's built-in types (the lang items), in scope everywhere without a use.
         // Loaded before Core/Hash/Prelude so the foundational types resolve for them. Its
@@ -2721,44 +2733,38 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
         appendBytes(into: inout langPath, from: stdRoot)
         appendBytes(into: inout langPath, from: "Lang.pw".bytes())
         if sources.exists(path: langPath) {
-            val lps: U64 = pathBuf.count()
-            appendBytes(into: inout pathBuf, from: langPath)
-            loaded.append(<Bind nameStart=lps nameLen=langPath.count() fieldStart=nextModuleId fieldLen=langPath.count() />)
-            c.modules.langModule = nextModuleId
-            nextModuleId = nextModuleId + 1
+            val admission = discovery.initialRoot(path: langPath, moduleId: nextModuleId)
+            c.modules.langModule = discovery.entries[admission.index].moduleId
+            if admission.inserted { nextModuleId += 1U64 }
         }
         // Force-load @Std/Core so its lang-item types (Optional/Result/Ordering),
         // operator traits + witnesses, and Iterator/Index machinery are AMBIENT
         // (spec/15: usable without `use` — `2 + 3`, `Optional`, `for` need none).
         // Its `part Core/Num.pw` + imports are followed by the BFS; a target that also
-        // `use @Std/Core`s dedups via pathSeen. A Core free function like `assert`
+        // `use @Std/Core`s reuses the registered Root entry. A Core free function like `assert`
         // still needs an explicit use — checkUseVisibility gates it as an ordinary
         // cross-module call (only types/operators are ambient, not free functions).
         mut val corePath: Array[U8] = []
         appendBytes(into: inout corePath, from: stdRoot)
         appendBytes(into: inout corePath, from: "Core.pw".bytes())
         if sources.exists(path: corePath) {
-            val cps: U64 = pathBuf.count()
-            appendBytes(into: inout pathBuf, from: corePath)
-            loaded.append(<Bind nameStart=cps nameLen=corePath.count() fieldStart=nextModuleId fieldLen=corePath.count() />)
-            c.modules.coreModule = nextModuleId
-            nextModuleId = nextModuleId + 1
+            val admission = discovery.initialRoot(path: corePath, moduleId: nextModuleId)
+            c.modules.coreModule = discovery.entries[admission.index].moduleId
+            if admission.inserted { nextModuleId += 1U64 }
         }
         // Force-load @Std/Hash: the implicit prelude's `Dictionary` lang item is built on
         // hashing (the `[k:v]` literal's `K: Hash` machinery + `SipHasher`), so the hashing
         // floor must always be LOADED even when the target never imports it. Force-load is
         // loading only — `Hash`/`Hasher`/`SipHasher` are NOT ambient (spec/15: not lang
         // items), so naming them in a type position still needs `use @Std/Hash`. The
-        // prelude itself imports it; a target that also imports it dedups via pathSeen.
+        // prelude itself imports it; a target that also imports it reuses the registered Root entry.
         mut val hashPath: Array[U8] = []
         appendBytes(into: inout hashPath, from: stdRoot)
         appendBytes(into: inout hashPath, from: "Hash.pw".bytes())
         if sources.exists(path: hashPath) {
-            val hps: U64 = pathBuf.count()
-            appendBytes(into: inout pathBuf, from: hashPath)
-            loaded.append(<Bind nameStart=hps nameLen=hashPath.count() fieldStart=nextModuleId fieldLen=hashPath.count() />)
-            c.modules.hashModule = nextModuleId
-            nextModuleId = nextModuleId + 1
+            val admission = discovery.initialRoot(path: hashPath, moduleId: nextModuleId)
+            c.modules.hashModule = discovery.entries[admission.index].moduleId
+            if admission.inserted { nextModuleId += 1U64 }
         }
         // Remember the bundled Io path. It is not force-loaded: the loader
         // records its module identity if and when an ordinary use reaches it.
@@ -2784,44 +2790,33 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             // The BFS records its module id below, so this is still the same
             // declaration-identity path as a source use.
             if sources.exists(path: ioPath) {
-                val iops: U64 = pathBuf.count()
-                appendBytes(into: inout pathBuf, from: ioPath)
-                loaded.append(<Bind nameStart=iops nameLen=ioPath.count() fieldStart=nextModuleId fieldLen=ioPath.count() />)
-                nextModuleId = nextModuleId + 1
+                val admission = discovery.initialRoot(path: ioPath, moduleId: nextModuleId)
+                if admission.inserted { nextModuleId += 1U64 }
             }
             // force-load @Plew/Syntax too: the harness calls `parseItem` and the derive
             // interfaces / built-in derivers (`impl Hash as Derive`) live there. Resolve
             // it through the gen target's OWN manifest (a path or git dependency), exactly
             // like a normal `@dep` use, so the macro's pinned Syntax version is the one
             // loaded. Its `part`s + `use @Std/Core` are followed by the BFS below; a
-            // target file that also imports it dedups via pathSeen.
+            // target file that also imports it reuses the registered Root entry.
             if synPath.count() != 0 {
                 if sources.exists(path: synPath) {
-                    if !(pathSeen(buf: pathBuf, loaded: loaded, path: synPath)) {
-                        val sys: U64 = pathBuf.count()
-                        appendBytes(into: inout pathBuf, from: synPath)
-                        loaded.append(<Bind nameStart=sys nameLen=synPath.count() fieldStart=nextModuleId fieldLen=synPath.count() />)
-                        nextModuleId = nextModuleId + 1
-                    }
+                    val admission = discovery.initialRoot(path: synPath, moduleId: nextModuleId)
+                    if admission.inserted { nextModuleId += 1U64 }
                 }
             }
         }
-        // module ids whose ROOT file has been processed. A module's root is loaded
-        // before any of its parts (parts are discovered while processing the root), so
-        // the FIRST file seen for a module id is its root and every later file with the
-        // same id is a `part` — used to enforce the spec/15 "part = impl only" rule.
-        mut val rootSeen: Array[U64] = []
         mut val qi: U64 = 0
-        while qi < loaded.count() {
-            val ent: Bind = loaded[qi]
+        while qi < discovery.entries.count() {
+            val ent = discovery.entries[qi]
             qi += 1
             // Loading can parse a large transitive graph before any later
             // phase exists. Preserve the exact completed-file count for the
             // long-process trace contract; this is a real worklist counter,
             // not a liveness heartbeat.
             tracePhaseCount(c: inout c, label: "load:file", count: qi)
-            val moduleId: U64 = ent.fieldStart
-            val path: Array[U8] = extractSpan(buf: pathBuf, start: ent.nameStart, len: ent.nameLen)
+            val moduleId: U64 = ent.moduleId
+            val path: Array[U8] = ent.path
             if path.count() == ioPath.count() {
                 mut val pathMatchesIo: Bool = true
                 mut val pathIndex: U64 = 0U64
@@ -2899,7 +2894,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                 mut val pkgRootModule: U64 = moduleId
                 val pkgRootPath: Array[U8] = packageRootPath(entry: path, stdRoot: stdRoot)
                 if pkgRootPath.count() != 0 {
-                    val foundRoot: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: pkgRootPath)
+                    val foundRoot: U64 = match discovery.find(path: pkgRootPath) { Optional.Some(v: val index) => discovery.entries[index].moduleId Optional.None => 4000000000U64 }
                     if foundRoot != 4000000000U64 {
                         pkgRootModule = foundRoot
                     }
@@ -2911,13 +2906,11 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             tracePhaseCount(c: inout c, label: "load:source-appended", count: qi)
             // The local discovery graph supplies membership. The source-input
             // operation owns append/registration/parse/admission together.
-            val isPart = u64ArrayHas(a: rootSeen, v: moduleId)
-            val target = <LoadedSourceTarget path=stringFromBytesUnchecked(path) moduleId=moduleId syntaxRoot=synPath.count() != 0U64 && bytesEq(a: path, b: synPath) role=if isPart { give <LoadedSourceRole.Part /> } else { give <LoadedSourceRole.Root /> } />
+            val target = <LoadedSourceTarget path=stringFromBytesUnchecked(path) moduleId=moduleId syntaxRoot=synPath.count() != 0U64 && bytesEq(a: path, b: synPath) role=ent.role />
             tracePhaseCount(c: inout c, label: "load:parse-start", count: qi)
             val roots = try c.parseLoadedSource(source: src, target: target)
             tracePhaseCount(c: inout c, label: "load:parse-done", count: qi)
             pendingRoots.append(roots)
-            if !isPart { rootSeen.append(moduleId) }
             val baseLen: U64 = dirPrefixLen(path: path)
             // per-package resolution context for THIS file's imports: its own package
             // dir / src root (`/…` imports) and its own declared dependencies (`@dep`
@@ -2928,6 +2921,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
             // follow `use`/`part` nodes to child files (in source order); note a
             // `@[...]` directive so the generated sibling can be auto-parted.
             mut val sawDirective: Bool = false
+            mut val directiveOffset: Optional[U64] = <Optional.None />
             mut val ii: U64 = 0
             while ii < roots.count {
                 mut val item: TopItemId = syntaxFileTopLevel(file: c.syntax, index: roots.start + ii)
@@ -2963,42 +2957,28 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                             }
                         }
                         if childPath.count() != 0 {
-                            val seen: Bool = pathSeen(buf: pathBuf, loaded: loaded, path: childPath)
-                            // a `part` link must reach a NOT-yet-loaded file: a file is
-                            // parted by exactly one parent (spec/15). If its target is
-                            // already in the module graph — parted by another file (a
-                            // diamond, same module or across modules) or already loaded as
-                            // an imported module root — that is an error. (`use` dedups
-                            // instead: importing the same module from many places is fine.)
-                            if !(imp.isImport) {
-                                if seen {
-                                    return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "this file is already in the module graph — a file can be `part`ed by at most one parent (spec/15: no duplicate/diamond `part`, and a `part` file is not independently importable)") />
+                            val role = if imp.isImport { give <LoadedSourceRole.Root /> } else { give <LoadedSourceRole.Part /> }
+                            val proposedModule = if imp.isImport { give nextModuleId } else { give moduleId }
+                            val requested = <DiscoveryEntry path=childPath moduleId=proposedModule role=role parent=path offset=<Optional.Some v=imp.path.start /> />
+                            val admission = match discovery.admit(entry: requested) {
+                                Result.Ok(value: val admission) => admission
+                                Result.Err(error: val conflict) => {
+                                    val report = c.discoveryConflictReport(conflict: conflict)
+                                    return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Source /> location=report.location() message=report.message() notes=report.notes() /> />
                                 }
                             }
-                            if !seen {
-                                // a resolved path that names no file on disk = a typo'd
-                                // use/part path — reject loudly (acceptance soundness:
-                                // never silently load nothing).
-                                if !(sources.exists(path: childPath)) {
+                            if admission.inserted {
+                                if !sources.exists(path: childPath) {
                                     return <Result.Err error=c.diagnosticAt(offset: imp.path.start, msg: "cannot open module file: the import/part path does not resolve to an existing file") />
                                 }
-                                // a `part` (isImport=false) joins this module; an
-                                // `use` (true) starts a fresh module.
-                                mut val childModule: U64 = moduleId
-                                if imp.isImport {
-                                    childModule = nextModuleId
-                                    nextModuleId = nextModuleId + 1
-                                }
-                                val cs: U64 = pathBuf.count()
-                                appendBytes(into: inout pathBuf, from: childPath)
-                                loaded.append(<Bind nameStart=cs nameLen=childPath.count() fieldStart=childModule fieldLen=childPath.count() />)
+                                if imp.isImport { nextModuleId += 1U64 }
                             }
                             // record the use edge (this module -> the module the path
                             // resolved to), whether the target is newly loaded or deduped,
                             // so name resolution can prefer a directly-imported module when
                             // a name is shared by coexisting package versions.
                             if imp.isImport {
-                                val tgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: childPath)
+                                val tgt: U64 = discovery.entries[admission.index].moduleId
                                 if tgt != 4000000000U64 {
                                     c.modules.importEdges.append(<Bind nameStart=imp.path.start nameLen=imp.path.end - imp.path.start fieldStart=moduleId fieldLen=tgt />)
                                     c.recordSyntaxImportOrigins(imp: imp, localModule: moduleId, targetMod: tgt, reExport: false)
@@ -3010,7 +2990,13 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                             }
                         }
                     }
-                    SyntaxTopItemKind.Directive => { sawDirective = true }
+                    SyntaxTopItemKind.Directive => {
+                        val directive = syntaxDirective(file: c.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: c.syntax, item: item) />)
+                        if !sawDirective && syntaxDirectiveReqCount(file: c.syntax, directive: directive) > 0U64 {
+                            directiveOffset = <Optional.Some v=syntaxDeriveReq(file: c.syntax, id: syntaxDirectiveReq(file: c.syntax, directive: directive, index: 0U64)).name.start />
+                        }
+                        sawDirective = true
+                    }
                     SyntaxTopItemKind.Extern => {
                         // a `@[...]` derive on an opaque extern lang-item (spec/15,16:
                         // e.g. `@[IntTryFrom] struct I8`) lives inside the extern block,
@@ -3021,6 +3007,7 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                         while di < syntaxExternStructCount(file: c.syntax, ext: ext) {
                             val dir: SyntaxDirective = syntaxDirective(file: c.syntax, id: syntaxExternStructDirective(file: c.syntax, ext: ext, index: di))
                             if syntaxDirectiveReqCount(file: c.syntax, directive: dir) > 0U64 {
+                                if !sawDirective { directiveOffset = <Optional.Some v=syntaxDeriveReq(file: c.syntax, id: syntaxDirectiveReq(file: c.syntax, directive: dir, index: 0U64)).name.start /> }
                                 sawDirective = true
                             }
                             di += 1U64
@@ -3044,10 +3031,13 @@ fn loadFrontendDeclarations(c: inout Comp, input: FrontendInput, sources: Source
                     val genPath: Array[U8] = genSiblingPath(path: path)
                     if genPath.count() != 0 {
                         if sources.exists(path: genPath) {
-                            if !(pathSeen(buf: pathBuf, loaded: loaded, path: genPath)) {
-                                val gs: U64 = pathBuf.count()
-                                appendBytes(into: inout pathBuf, from: genPath)
-                                loaded.append(<Bind nameStart=gs nameLen=genPath.count() fieldStart=moduleId fieldLen=genPath.count() />)
+                            val requested = <DiscoveryEntry path=genPath moduleId=moduleId role=<LoadedSourceRole.Part /> parent=path offset=directiveOffset automatic=true />
+                            match discovery.admit(entry: requested) {
+                                Result.Ok(value: _) => {}
+                                Result.Err(error: val conflict) => {
+                                    val report = c.discoveryConflictReport(conflict: conflict)
+                                    return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Source /> location=report.location() message=report.message() notes=report.notes() /> />
+                                }
                             }
                         }
                     }

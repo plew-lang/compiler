@@ -1,0 +1,63 @@
+// Private structural core must not manufacture Source authority.
+fn main() {
+    mut val graph = <SourceDiscovery />
+    val first = graph.initialRoot(path: "Root.pw".bytes(), moduleId: 7U64)
+    val repeated = graph.initialRoot(path: "Root.pw".bytes(), moduleId: 99U64)
+    if !first.inserted || repeated.inserted || first.index != repeated.index || graph.entries[repeated.index].moduleId != 7U64 { panic("root reuse lost module identity") }
+    val part = <DiscoveryEntry path="Part.pw".bytes() moduleId=7U64 role=<LoadedSourceRole.Part /> parent="Root.pw".bytes() offset=<Optional.Some v=0U64 /> />
+    graph.admit(entry: part).unwrap()
+    for requested in [part, <DiscoveryEntry path="Part.pw".bytes() moduleId=8U64 role=<LoadedSourceRole.Root /> />] {
+        match graph.admit(entry: requested) {
+            Result.Err(error: val conflict) => {
+                mut val compiler = <Comp />
+                val raw = compiler.discoveryConflictReport(conflict: conflict)
+                match raw.failureDomain() { FailureDomain.Unclassified => {} _ => { panic("raw structural classification changed") } }
+                if raw.isSourceRejection() || compiler.sourceFailureHasOwner(diagnostic: raw) { panic("raw membership conflict gained Source") }
+                if raw.notes().count() == 0U64 { panic("previous membership origin lost") }
+            }
+            Result.Ok(value: _) => { panic("raw conflicting membership accepted") }
+        }
+        if graph.entries.count() != 2U64 { panic("refused request mutated membership") }
+    }
+    for name in ["ExplicitTwice", "ExplicitAndAuto", "OwnerFirst", "ConsumerFirst", "AutoTargetsRoot", "AutoTargetsOtherPart", "SameModuleDiamond", "DifferentModuleDiamond", "PartCycle"] {
+        val input = <FrontendInput.File path="tests/compiler/frontend/fixtures/DiscoveryMembership/"+name+"/Main.pw" />
+        val failure = match openFrontend(input: input, sources: <SourceAccess stdRoot="std/".bytes() />) {
+            Result.Err(error: val diagnostic) => diagnostic
+            Result.Ok(value: _) => { panic("source membership conflict accepted: "+name) }
+        }
+        if failure.message() != "this file is already in the module graph — a file can be `part`ed by at most one parent (spec/15: no duplicate/diamond `part`, and a `part` file is not independently importable)" { panic("membership rejected for another reason: "+name) }
+        if !failure.isSourceRejection() { panic("source membership refusal lost domain: "+name) }
+        if failure.notes().count() == 0U64 { panic("source membership previous origin lost: "+name) }
+        val prefix = "tests/compiler/frontend/fixtures/DiscoveryMembership/"+name+"/"
+        val requestedFile = if name == "OwnerFirst" { give "Consumer.pw" } else if name == "ConsumerFirst" || name == "AutoTargetsRoot" || name == "AutoTargetsOtherPart" { give "Owner.pw" } else if name == "SameModuleDiamond" || name == "DifferentModuleDiamond" { give "B.pw" } else if name == "PartCycle" { give "A.pw" } else { give "Main.pw" }
+        val requestedLine: I64 = if name == "ExplicitAndAuto" { give 3I64 } else if name == "ExplicitTwice" || name == "AutoTargetsRoot" || name == "AutoTargetsOtherPart" { give 2I64 } else { give 1I64 }
+        match failure.location() {
+            DiagnosticLocation.File(path: val path, line: val line) => { if path != prefix+requestedFile || line != requestedLine { panic("membership request origin changed: "+name+" "+path) } }
+            _ => { panic("membership lost source location") }
+        }
+        val previousFile = if name == "OwnerFirst" { give "Owner.pw" } else if name == "ConsumerFirst" { give "Consumer.pw" } else if name == "AutoTargetsOtherPart" { give "Other.pw" } else if name == "SameModuleDiamond" || name == "DifferentModuleDiamond" { give "A.pw" } else { give "Main.pw" }
+        val previousLine: I64 = if name == "ExplicitAndAuto" { give 2I64 } else { give 1I64 }
+        match failure.notes()[0U64].location {
+            DiagnosticLocation.File(path: val path, line: val line) => { if path != prefix+previousFile || line != previousLine { panic("membership previous origin changed: "+name) } }
+            _ => { panic("membership previous origin lost file") }
+        }
+        if name == "ExplicitAndAuto" || name == "AutoTargetsRoot" || name == "AutoTargetsOtherPart" {
+            if failure.notes().count() < 2U64 { panic("automatic inclusion explanation lost") }
+            val explanation = if name == "AutoTargetsRoot" { give "macro annotations include this generated part automatically; it cannot also be an independent module root" } else { give "macro annotations automatically include this generated part; remove the duplicate explicit part directive" }
+            if failure.notes()[1U64].message != explanation { panic("automatic inclusion gave wrong corrective advice") }
+        }
+    }
+    for name in ["RepeatedRootUse", "MultipleAnnotations", "NestedPart"] {
+        openFrontend(input: <FrontendInput.File path="tests/compiler/frontend/fixtures/DiscoveryMembership/"+name+"/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    }
+    // Generation suppresses only the entry's automatic output, not the
+    // committed generated parts of dependency modules.
+    mut val generation = <Comp />
+    analyzeFrontendDeclarations(c: inout generation, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/DiscoveryMembership/ExplicitAndAuto/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions genMode=true />).unwrap()
+    mut val dependencyGeneration = <Comp />
+    match analyzeFrontendDeclarations(c: inout dependencyGeneration, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/DiscoveryMembership/AutoTargetsOtherPart/Main.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />, options: <FrontendOptions genMode=true />) {
+        Result.Err(error: val diagnostic) => { if !diagnostic.isSourceRejection() || diagnostic.notes().count() == 0U64 { panic("generation dependency membership lost refusal") } }
+        Result.Ok(value: _) => { panic("generation suppressed dependency output membership") }
+    }
+
+}

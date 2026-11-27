@@ -116,3 +116,71 @@ impl Comp {
         return <Result.Ok value=roots />
     }
 }
+
+// Membership alone: no compiler state, source permission or diagnostics.
+impl SourceDiscovery {
+    fn find(path: Array[U8]) -> Optional[U64] {
+        for index in 0U64..<self.entries.count() {
+            if bytesEq(a: self.entries[index].path, b: path) { return <Optional.Some v=index /> }
+        }
+        return <Optional.None />
+    }
+    inout fn admit(entry: DiscoveryEntry) -> Result[DiscoveryAdmission, DiscoveryConflict] {
+        match self.find(path: entry.path) {
+            Optional.Some(v: val index) => {
+                val previous = self.entries[index]
+                match previous.role {
+                    LoadedSourceRole.Root => {
+                        match entry.role {
+                            LoadedSourceRole.Root => { return <Result.Ok value=<DiscoveryAdmission index=index inserted=false /> /> }
+                            LoadedSourceRole.Part => {}
+                        }
+                    }
+                    LoadedSourceRole.Part => {}
+                }
+                return <Result.Err error=<DiscoveryConflict requested=entry previous=previous /> />
+            }
+            Optional.None => {}
+        }
+        val index = self.entries.count()
+        self.entries.append(entry)
+        return <Result.Ok value=<DiscoveryAdmission index=index inserted=true /> />
+    }
+    // Initial entry/ambient/support registration happens before any file is
+    // processed and therefore before any Part request can exist.
+    inout fn initialRoot(path: Array[U8], moduleId: U64) -> DiscoveryAdmission {
+        return match self.admit(entry: <DiscoveryEntry path=path moduleId=moduleId role=<LoadedSourceRole.Root /> />) {
+            Result.Ok(value: val admission) => admission
+            Result.Err(error: _) => { panic("internal error: part in initial root discovery") }
+        }
+    }
+}
+impl Comp {
+    fn discoveryIntroductionLocation(entry: DiscoveryEntry) -> DiagnosticLocation {
+        return match entry.offset {
+            Optional.Some(v: val offset) => self.diagnosticLocationAt(offset: offset)
+            Optional.None => {
+                val path = if entry.automatic && entry.parent.count() != 0U64 { give entry.parent } else { give entry.path }
+                give <DiagnosticLocation.File path=stringFromBytesUnchecked(path) line=1I64 />
+            }
+        }
+    }
+    // Formatting a raw structural conflict never grants source authority.
+    fn discoveryConflictReport(conflict: DiscoveryConflict) -> CompileDiagnostic {
+        mut val notes: Array[DiagnosticNote] = []
+        mut val previousMessage = if conflict.previous.automatic { give "previous automatic part inclusion is requested here" } else { give "previous file introduction is here" }
+        if conflict.previous.parent.count() != 0U64 { previousMessage = previousMessage+" ("+stringFromBytesUnchecked(conflict.previous.parent)+")" }
+        notes.append(<DiagnosticNote location=self.discoveryIntroductionLocation(entry: conflict.previous) message=previousMessage />)
+        if conflict.requested.automatic {
+            val explanation = match conflict.previous.role {
+                LoadedSourceRole.Root => "macro annotations include this generated part automatically; it cannot also be an independent module root"
+                LoadedSourceRole.Part => {
+                    give if conflict.previous.automatic { give "automatic part inclusion conflicts with an earlier automatic inclusion" }
+                    else { give "macro annotations automatically include this generated part; remove the duplicate explicit part directive" }
+                }
+            }
+            notes.append(<DiagnosticNote location=self.discoveryIntroductionLocation(entry: conflict.requested) message=explanation />)
+        }
+        return <CompileDiagnostic location=self.discoveryIntroductionLocation(entry: conflict.requested) message="this file is already in the module graph — a file can be `part`ed by at most one parent (spec/15: no duplicate/diamond `part`, and a `part` file is not independently importable)" notes=notes />
+    }
+}
