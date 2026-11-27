@@ -1,6 +1,6 @@
 ---
 id: met-gjxo
-status: in_progress
+status: closed
 deps: []
 links: [com-9sa5, met-wuzv]
 created: 2026-11-27T04:45:28Z

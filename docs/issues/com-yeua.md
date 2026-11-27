@@ -13,19 +13,21 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. Current normal20261127T031803-test-72ea07 completes
-3314 identical-source cases with252 failures and invariant inputs. met-iv6d
-resolves existing partdiamond/crossmodule with no new failures or changed
-remaining aggregate reasons.
-[Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/whole.json).
+This parent remains open. Current normal20261127T053719-test-48c29a completes
+3314 identical-source cases with249 failures and invariant inputs. met-gjxo
+resolves three local duplicate nominal label classifications from the252
+baseline, with no new failures or other aggregate result changes. All6651
+fixture/expectation files and11 std files also match the baseline.
+[Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/declaration-labels/whole.json).
 
-The finite membership producer is independently accepted at productc6720051.
-FormalG2/median7.325122<=7.5 and gen pass certify that candidate and finite
-change, not this parent or phase3. Saved measured594990c485aa/frozen std are
-next development inputs; current adoption/retention are in the
-[worklog](../../../agents/worklog.md). main/seed/tracked-bin are separate.
-com-ntm8 retains the older masked-oracle work; single-cause matrix/native
-controls establish membership correctness independently.
+The finite nominal producer is independently accepted at source86906902.
+FormalG2/median7.359985<=7.5 and gen pass certify that candidate and finite
+change, not this parent or phase3. Saved measured da2c8c0a82e9/frozen std
+pass48 controls and are the next development inputs; current adoption/retention
+are in the [worklog](../../../agents/worklog.md). Main/seed/tracked-bin remain
+separate. com-ntm8 retains older masked-oracle work. met-wuzv retains the
+separate public verifier/foreign-corpus coherence investigation, without
+classifying it as an ordinary-source or nominal-core failure.
 
 Reconcile residual producers and existing owners before selecting another
 finite child; not every failure belongs here. Message groups are investigative

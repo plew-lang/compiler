@@ -43,9 +43,11 @@ Original audit-time independence does not waive this implementation admission. P
 
 ## Coordinated declaration-label repair
 
-met-gjxo owns newly executed imported struct-field/enum-variant/payload-label
-false acceptance and source-origin repair. It may migrate the exact checkDupFields
-leaf (unused ctx, bytes/spans versus mutable Comp) while sharing one decision
-with source admission. Other functions and full audit closure stay here; do not
-close this task from that finite slice. Source module-zero bypass is acceptance
-correctness outside this task's behavior-preserving refactor contract.
+met-gjxo is closed after independent finite certification. It repaired imported
+struct-field/enum-variant/payload-label false acceptance and source-origin
+loss, removed checkDupFields/unused ctx and moved bytes/span comparison into
+DeclarationLabels without mutable Comp authority. Source admission and Raw
+validation share that core. Other functions, callers and full audit closure
+remain here; this finite field leaf does not close this task. Module-zero
+acceptance correctness was separately owned by met-gjxo, outside this task's
+behavior-preserving refactor contract.
