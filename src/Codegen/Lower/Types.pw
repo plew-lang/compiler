@@ -650,6 +650,7 @@ pub impl Comp {
         val type = (try self.lowerTypeCore(t: (try self.normalizeProjectionType(t: t))))
         try self.checkLoweredTypeRecipeChildren(ref: type.ref, children: type.authoredChildren, offset: t.span.start)
         val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: t.span.start, children: type.authoredChildren)
+        try self.bindLoweredAssociatedSelection(selection: type.associatedSelection, occurrence: occurrence)
         if t.name == "fn" && !t.isRecord { self.retainFunctionTypeLabelPositions(occurrence: occurrence, term: type.ref, site: t.span.start, end: t.span.end, positions: t.argLabelSpans) }
         return <Result.Ok value=<PType start=type.start len=type.len isArray=type.isArray ref=type.ref authoredUse=occurrence /> />
     }
@@ -857,7 +858,7 @@ pub impl Comp {
             if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
             for recipe in selected.arguments { children.append(recipe) }
         } else { try self.appendViewArgumentRecipes(ref: ref, sources: viewRecipes, children: inout children) }
-        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children /> />
+        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children)) /> />
     }
 
     // SyntaxFile path for type lowering. It has the same semantic output as
@@ -869,6 +870,7 @@ pub impl Comp {
         val type = (try self.lowerSyntaxTypeNode(t: syntaxType(file: self.syntax, id: id)))
         try self.checkLoweredTypeRecipeChildren(ref: type.ref, children: type.authoredChildren, offset: syntaxType(file: self.syntax, id: id).span.start)
         val occurrence = self.recordAuthoredTypeUse(ref: type.ref, site: syntaxType(file: self.syntax, id: id).span.start, children: type.authoredChildren)
+        try self.bindLoweredAssociatedSelection(selection: type.associatedSelection, occurrence: occurrence)
         val node = syntaxType(file: self.syntax, id: id)
         if !node.isRecord && rangeEquals(bytes: self.arena.bytes, start: node.name.start, len: node.name.end-node.name.start, kw: "fn") {
             // Fewer than two written labels cannot conflict. Do not allocate
@@ -1100,7 +1102,7 @@ pub impl Comp {
             if selected.arguments.count() != assocTraitArgs.count() { return <Result.Err error=self.diagnosticAt(offset: site, msg: "projection argument recipe count mismatch", failureDomain: <FailureDomain.Internal />) /> }
             for recipe in selected.arguments { children.append(recipe) }
         } else { try self.appendViewArgumentRecipes(ref: ref, sources: viewRecipes, children: inout children) }
-        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children /> />
+        return <Result.Ok value=<PType start=result.start len=result.len isArray=result.isArray ref=result.ref authoredChildren=children associatedSelection=(try self.captureLoweredAssociatedSelection(ref: result.ref, site: t.span.start, children: children)) /> />
     }
 
     // Reserve the final contiguous argument range before recursive lowering.

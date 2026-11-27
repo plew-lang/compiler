@@ -43,6 +43,13 @@ impl Comp {
         if ref >= self.arena.typeTermCount() { return <Result.Err error=<CompileDiagnostic failureDomain=<FailureDomain.Internal /> location=<DiagnosticLocation.Unpositioned /> message="projection-member query has an unknown type term" /> /> }
         val type = self.arena.typeTermAt(index: ref)
         val owner = if type.hasAssocTraitDecl { give type.assocTraitDeclOffset } else { give type.assocTraitStart }
+        val retained = try self.retainedAssociatedSelection(occurrence: occurrence, ref: ref)
+        if retained.isSome() {
+            match retained.unwrap().outcome {
+                AssociatedMemberOutcome.Unique(candidate: _) => { return <Result.Ok value=() /> }
+                _ => {}
+            }
+        }
         if try self.projectionMemberExists(owner: owner, traitId: type.assocTraitId, memberId: type.assocNameId) { return <Result.Ok value=() /> }
         val raw = self.missingProjectionMember(site: type.siteOffset)
         val evidence = match self.captureSourceTypeUseFailureEvidence(occurrence: occurrence, origin: origin) { Optional.Some(v: val evidence) => evidence Optional.None => { return <Result.Err error=raw /> } }

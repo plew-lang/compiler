@@ -75,6 +75,8 @@ pub struct PType {
     // Transient lowering draft, in canonical semantic child order. Once an
     // occurrence is recorded, its immutable recipe owns these edges instead.
     pub val authoredChildren: Array[U64] = []
+    // Session-local lowering draft, explicitly attached to the new occurrence.
+    pub val associatedSelection: U64 = 0U64
 
 }
 

@@ -1,0 +1,41 @@
+// Source query retention is distinct from canonical publication and proof.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/Inherited.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
+    val function = compiler.arena.functionAt(index: index)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val occurrence = parameter.authoredTypeUse
+    val selected = compiler.retainedAssociatedSelection(occurrence: occurrence, ref: parameter.ty).unwrap().unwrap()
+    val parent = compiler.internBytes(s: "Parent").nameId
+    val child = compiler.internBytes(s: "Child").nameId
+    val rootOwner = selected.graph.roots[0U64].constraint.key.owner
+    val rootIndex = compiler.decls.traitIndexByOffset(offset: rootOwner)
+    if compiler.decls.traitAt(index: rootIndex).nameId != child { panic("authored root was replaced by its declaring parent") }
+    match selected.outcome {
+        AssociatedMemberOutcome.Unique(candidate: val candidate) => {
+            val declaring = compiler.decls.traitIndexByOffset(offset: candidate.instance.owner)
+            if compiler.decls.traitAt(index: declaring).nameId != parent || selected.graph.edges.count() != 1U64 { panic("declaring identity or inheritance derivation lost") }
+        }
+        _ => { panic("retained source query lost its unique outcome") }
+    }
+    val binding = compiler.associatedSelectionOccurrences.get(key: occurrence).unwrap()
+    match compiler.bindLoweredAssociatedSelection(selection: binding.selection, occurrence: occurrence) {
+        Result.Ok(value: _) => { panic("write-once selection was rebound") }
+        Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("duplicate binding gained source authority") } } }
+    }
+    val scalar = compiler.internBytes(s: "I64")
+    val different = compiler.pushType(t: <TypeRef nameStart=scalar.nameStart nameLen=scalar.nameLen nameId=scalar.nameId args=[] />)
+    match compiler.retainedAssociatedSelection(occurrence: occurrence, ref: different) {
+        Result.Ok(value: _) => { panic("retained selection accepted a different query term") }
+        Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("foreign query gained source authority") } } }
+    }
+    val originalFacts = compiler.sourceFacts
+    compiler.sourceFacts = <SourceFactDirectory />
+    match compiler.retainedAssociatedSelection(occurrence: occurrence, ref: parameter.ty) {
+        Result.Ok(value: _) => { panic("retained selection crossed compiler sessions") }
+        Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("foreign session gained source authority") } } }
+    }
+    compiler.sourceFacts = originalFacts
+    compiler.retainedAssociatedSelection(occurrence: occurrence, ref: parameter.ty).unwrap().unwrap()
+}

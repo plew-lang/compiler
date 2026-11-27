@@ -763,6 +763,24 @@ struct AdmittedTraitConstraintOperands {
     val checked: Array[LocalAnnotationProof]
 }
 impl AdmittedTraitConstraintOperands { factory }
+// Semantic query retention is not conformance admission authority.
+struct LoweredAssociatedSelection {
+    val session: U64
+    val member: U64
+    val term: U64
+    val site: U64
+    val scope: U64
+    val arguments: Array[U64]
+    val result: AssociatedMemberResult
+}
+impl LoweredAssociatedSelection { factory }
+struct AssociatedSelectionOccurrence {
+    val selection: U64
+    val occurrence: U64
+    val recipe: U64
+    val scope: U64
+}
+impl AssociatedSelectionOccurrence { factory }
 struct LoweredTypeViewRecipe {
     val source: ResolvedViewSource
     val arguments: Array[U64]
@@ -1487,6 +1505,9 @@ pub struct Comp {
     mut val failedTypeVisibility: Array[SourceTypeVisibilityFailure] = []
     mut val authoredTypeScopes: Array[AuthoredTypeScopeReceipt] = []
     mut val authoredTypeOccurrences: Array[AuthoredTypeUseReceipt] = []
+    mut val loweredAssociatedSelections: Array[LoweredAssociatedSelection] = []
+    mut val associatedSelectionOccurrences: Dictionary[U64, AssociatedSelectionOccurrence] = [:]
+    mut val associatedSelectionDraftOwners: Dictionary[U64, U64] = [:]
     mut val authoredLoopTransfers: Array[AuthoredLoopTransfer] = []
     mut val failedLoopTargets: Array[SourceLoopTargetFailure] = []
     mut val namespaceFieldNormalizations: Dictionary[U64, NamespaceFieldNormalization] = [:]

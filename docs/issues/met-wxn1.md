@@ -81,3 +81,24 @@ handoff and identified required implementation boundaries:
 
 This design remains within the adopted contract. Final implementation and
 producer-to-final-consumer certification are not yet complete.
+
+
+## Saved-query implementation checkpoint (not B completion)
+
+PType now carries a selection draft token. TypeAst/Syntax wrappers and lexical
+receiver occurrence creation explicitly bind it once to the exact source use.
+The append-only Comp record retains query graph/outcome, original argument
+recipes, session/site/scope/member and term identity. Reads check the source
+recipe/occurrence and original complete root; different terms/sessions and
+rebinding fail Internal, never Source. A query result is not a conformance proof.
+
+Native source-selection-retention.json succeeds through actual Source admission,
+checks authored Child root and declaring Parent candidate/edge, duplicate-bind
+rejection and foreign-term/session rejection, then reuses the valid record.
+The original publication test remains RED at its Parent identity assertion
+(source-selection-publication-wip.json): Source admission now succeeds, but the
+canonical term is still Child. Thus the authored Child proof requirement remains
+intact at this checkpoint; no Parent publication/final-consumer claim is made.
+Missing/Ambiguous owned refusal and remaining legacy selection paths are also
+unfinished. Continue with separate original-root proof and declaring-instance
+recipe/publication; do not merely rewrite the canonical owner and drop Child.
