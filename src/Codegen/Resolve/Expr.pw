@@ -1468,7 +1468,7 @@ impl Comp {
 
 pub impl Comp {
     inout fn recordTryExpression(exprId: U64, operand: U64) -> Result[(), CompileDiagnostic] {
-        val returnTerm = try self.normalizedValueType(ref: self.declaredBodyReturnTerm(fnIdx: self.cur.checkFn))
+        val returnTerm = try self.normalizedValueType(ref: (try self.semanticBodyReturnContext(fnIdx: self.cur.checkFn)))
         if self.resultEnumIndex(ref: returnTerm) >= self.arena.enumCount() {
             return <Result.Err error=self.diagnosticAt(offset: self.exprOffset(id: operand), msg: "`try` is only valid in a function that returns a Result (spec/13)") />
         }

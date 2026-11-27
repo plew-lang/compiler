@@ -71,6 +71,18 @@ fn main() {
         Result.Err(error: val diagnostic) => { panic("free call source verification lost admitted signature: "+diagnostic.message()) }
     }
 
+    val propagating = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "propagating").nameId)
+    val propagationOwner = <SemanticCompletionOwner.Function index=propagating />
+    if !compiler.sourceFacts.begin(owner: propagationOwner) { panic("propagation facts were not fresh") }
+    match compiler.recordParametricFunctionWithOrigin(fnIdx: propagating, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=propagationOwner /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("try failed to consume its admitted logical result: "+diagnostic.message()) }
+    }
+    if compiler.sourceFacts.activeBuilder.data.tries.count() != 1U64 { panic("propagation case did not record try") }
+    val propagation = compiler.sourceFacts.activeBuilder.data.tries[0U64]
+    if !compiler.typeRefEq(a: propagation.sourceErrorTerm, b: propagation.targetErrorTerm) { panic("try changed identical admitted associated error types") }
+    compiler.checkSourceTypingObligationsWithOrigin(owner: propagationOwner, origin: <SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=propagationOwner />).unwrap()
+
     val wrongCaller = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "wrongCaller").nameId)
     val wrongOwner = <SemanticCompletionOwner.Function index=wrongCaller />
     if !compiler.sourceFacts.begin(owner: wrongOwner) { panic("negative caller facts were not fresh") }

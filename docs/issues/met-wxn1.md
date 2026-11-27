@@ -248,9 +248,8 @@ Record reuses one result read for its origin and published body signature.
 Meta body-result-checkpoint.json retains target RED, GREEN and20-profile GREEN
 with input hashes. Independent finite review found no required correction in
 this slice. It did not certify CLI/AOT/ORC, performance or task completion.
-Remaining audit: recordTryExpression still reads declaredBodyReturnTerm directly;
-exercise nested Result associated error/result propagation before certifying
-that consumer. Raw/closure/forwarding were source-inspected, not newly executed.
+Raw/closure/forwarding were source-inspected, not newly executed.
+The try consumer is covered by the checkpoint below.
 
 ## Free callable signature checkpoint
 
@@ -272,6 +271,18 @@ finite source review checked explicit-ID ownership, partial inference, provided
 gates and DiagnosticCandidate fallback. No new member/name selection is added.
 Method Raw adapters and pre-admission ranking remain unaudited. Final fresh
 CLI/AOT/ORC, performance and all task gates are still required.
+
+## Try logical-result checkpoint
+
+recordTryExpression now reads semanticBodyReturnContext rather than the raw
+declared result. A Result[I64,T#Child.Output] operand and identical function
+result previously fabricated a spec13 From-conversion failure. The regression
+now records one try fact with equal source/target errors and passes Source typing
+obligations. Meta try-result-checkpoint.json retains RED and final native-v2
+20-profile GREEN with input invariance. Independent finite review found no
+required correction: Result detection, error extraction and From selection are
+unchanged, and ordinary logical-result handling is shared rather than duplicated.
+This does not certify remaining method/closure producers or fresh AOT/ORC.
 
 ## Next implementation sequence
 

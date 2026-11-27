@@ -13,3 +13,7 @@ async fn returningAsync[T](value: T#Child.Output) -> Promise[T#Child.Output] whe
 fn produce[T](owner: T, value: T#Child.Output) -> T#Child.Output where T: Child { return value }
 fn caller() -> I64 { return produce(owner: <Leaf />, value: 7I64) }
 fn wrongCaller() -> I64 { return produce(owner: <Leaf />, value: true) }
+fn propagating[T](value: Result[I64, T#Child.Output]) -> Result[I64, T#Child.Output] where T: Child {
+    val number = try value
+    return <Result.Ok value=number />
+}
