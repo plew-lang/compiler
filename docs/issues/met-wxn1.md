@@ -23,3 +23,28 @@ Follow that selection through Source type admission, declaration/body facts, gen
 Guarantees must run end to end, including qualified/short/lexical forms, parameterized/arity-changing inheritance, diamonds, ambiguous/equal-output cases, missing Child view proof, same-name modules and unused body controls. Do not close from saved fields or added invariants alone. If split further, retain this complete producer-to-final-consumer guarantee at this owner.
 
 
+
+
+## Producer-to-consumer implementation sequence
+
+The inherited language matrix is already RED on fixed149aac (39 cases,27 target
+mismatches); do not replace it with service-only outcomes. Query unit A is closed.
+
+1. Inspect the two TypeAst/Syntax projection adapters and lexical-self projection
+   adapter together with Source recipes/admission. LoweredTypeProjection currently
+   has only one source and argument-recipe list: it cannot represent both the
+   authored Child proof and substituted Parent output when their arities differ.
+   Add the explicit saved selection/provenance at that handoff before changing
+   canonical term ownership; do not reconstruct it from an interned term later.
+2. Replace chooseShortProjectionSource and direct-member prefilters with the
+   common query over admitted matching roots/equation context. Retain bound
+   readiness and original declaration scope; avoid eager unrelated clause loading.
+3. Derive Parent argument recipes from retained substitution edges, preserve the
+   authored Child receiver/view recipes and admission obligations, and consume
+   saved selection through AuthoredTypes, facts, Mono and witness output readers.
+4. Run qualified/short/lexical and changed-arity accepts through AOT/ORC and
+   generic instantiation; NoChildProof must still reject at the authored view.
+   Audit/remove competing source/member selection and review the whole B chain.
+
+This is an execution sequence within the existing task, not a relaxation of its
+final-consumer completion boundary. Missing/Ambiguous owned transport belongs C.
