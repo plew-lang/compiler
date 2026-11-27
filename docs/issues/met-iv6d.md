@@ -59,74 +59,56 @@ com-ntm8 retains masked partdiamond/crossmodule/missing reason fixtures, which
 are not sufficient oracles here. General parser/path API narrowing and missing
 input/phantom-dependency errors are not included. Parent/phase3/main stay open.
 
-## Independent scope advice
+## Implemented contract and outcome
 
-qualified_member_plan confirms a discovery acceptance defect, not transport
-alone; role/edge ownership is the natural finite repair. The user has selected duplicate rejection in met-7ust; contracts now distinguish
-annotation aggregation from membership admission. No product repair is claimed.
+Productc6720051 closes this finite discovery class. Private SourceDiscovery
+entries own path/module/Root-Part role/parent/introduction. One admission
+operation handles initial roots, written edges and the single collected auto
+request. Root reuse retains its actual module ID and still records every use
+edge for the existing DAG checker. Processing reads stored role, not rootSeen.
+The loader no longer chooses acceptance via pathSeen/moduleIdOfPath or an
+automatic-request skip. General Raw Path APIs are not removed by this repair.
 
-## Implementation plan before product mutation
+The core returns structural conflicts without Comp, callbacks or source flags.
+Raw report formatting is Unclassified; the actual fresh parsed-edge owner
+creates Source while retaining both introductions. Reports/notes allocate only
+on refusal. Initial roots are registered before any Part can exist. Named
+macro requests supply the first relevant annotation span; legacy unspanned
+empty markers keep their existing inclusion behavior and parent-file origin.
+No parser rescan, global source permission or second membership validator.
 
-Use private source-discovery entries, not generic Bind/path-buffer rows. Each
-entry owns resolved path bytes, module identity, Root/Part role and introducing
-parent/origin (written/automatic source offset; initial roots have no source
-edge). A private graph owns the append-only work queue and one admission
-operation returning either its existing/new index or a typed conflict. Only
-Root+Root reuse succeeds; any second Part admission or Root/Part conflict
-refuses. This decides membership once; readers do not infer roles from rootSeen.
-Retain source-edge provenance for both diagnostic locations.
+- Fixed adopted8f5 matrix36:positive9 GREEN, required-refusal27 RED
+  (erroneous acceptance or lost domain). Frozen inputs unchanged.
+- Native core Raw/source distinction, nonmutating refusal, root/module identity
+  reuse, actual order/parent/role conflicts, exact request/previous positions,
+  auto explanations, entry gen suppression/dependency preservation and retained
+  failed-session diagnostics pass. Setup compile failures are not RED.
+- Independent qualified_member_plan accepts plan, implementation and final
+  guarantees. Its confirmed wrong auto/Root corrective advice was fixed and
+  tested; no mandatory finding remains.
+- Fresh build20261127T024805-build-2eb17b, membership36 and existing part15/
+  root-use21 pass. Saved measured carrier membership36 passes. Same-source
+  old7.272381/new7.237265s and identical LLVM, without claiming all timing
+  differences as contribution.
+- Formal20261127T025829-self-host-adbbca:G2, input invariant, median7.325122
+  <=7.5s. Generation20261127T031507-gen-a7d02c passes unchanged inputs.
+- Whole20261127T031803-test-72ea07 completes3314 identical-source cases:
+  254→252 failures, only partdiamond/crossmodule resolve; no added failures,
+  changed remaining aggregate reasons, removed/added cases or skips.
 
-Initial entry/ambient/gen-support roots use the same Root admission before
-any Part can exist. File processing reads the stored role directly. Written
-use/part and the file's single aggregated auto-part request call the same
-admission. Module id allocation advances only for newly registered roots;
-package-root lookup and imported module identity read the same entries.
-Remove competing pathSeen/moduleIdOfPath and auto-part skip decisions from
-this loader, without removing independently used Raw Path APIs indiscriminately.
+[Canonical evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/native.json),
+[fresh](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/fresh.json),
+[formal](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/formal.json),
+[gen](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/gen.json),
+[whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/whole.json),
+[carrier](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/carrier.json).
 
-The core accepts no Comp, source flags or callback and returns typed structural
-conflicts, not Source reports. The actual fresh parser/edge owner interprets
-its proven refusal and preserves Source through service/session/CLI. Format
-diagnostics only on conflict; avoid per-edge report allocation or reparsing.
-Initial-root invariants must be distinguished from user-authored edge failures.
-No whole Comp snapshot or repeated source parsing is permitted.
-
-Before implementation, review the private types and call sites, then execute
-fixed-carrier RED/positive controls. Include both ordering directions, explicit
-repeat, explicit+auto in both orders where applicable, multiple annotations
-producing one auto edge, legal repeated Root use, different parents/modules,
-part cycles and generated role conflicts. Native controls must distinguish raw
-structural refusal from the actual fresh-source authority and exact origin.
-
-## Active implementation checkpoint
-
-The adopted carrier8f5e342f1577 executes36 actual CLI cases:9 positive modes
-pass,27 required refusal modes expose erroneous acceptance or Unclassified
-transport. Inputs unchanged. [Matrix RED](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/matrix-red.json).
-
-Private SourceDiscovery/DiscoveryEntry replace loader-local Bind/pathBuf and
-rootSeen. Root+Root reuse retains stored module IDs; duplicate Part and role
-conflicts share admission. Written and per-file auto requests retain parent,
-origin offset and automatic origin. The actual fresh owner creates Source from
-the typed conflict; Raw report formatting remains Unclassified and carries
-notes without granting admission. Source offsets use the first named macro
-request, since shared Syntax directive top-item spans are currently zero;
-unspanned empty markers retain the containing parent-file origin and existing
-auto inclusion behavior. No parser rescan or new empty-marker rule is added.
-
-First native structural/owned-source and exact primary/previous location
-checks pass; generation entry suppression and dependency auto conflict also
-pass. Latest-source repeat and session retention are still pending. No fresh
-compiler, whole regression, formal performance or final recognition claimed.
-
-## Independent implementation review
-
-qualified_member_plan confirms one acceptance authority, correct stored module
-IDs/roles, retained use DAG edges and bounded core/owner responsibilities. One
-confirmed diagnostic defect (auto against Root incorrectly advised deleting an
-explicit part) is fixed with role-specific advice and exact native assertions.
-Latest native source/core/origin/gen and real session retention pass; Source
-location, previous note, automatic explanation and eager/session copies survive.
-Two intermediate compile setup failures from a missing outer give are repaired
-and not counted as RED. [Native evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/native.json).
-Fresh CLI, applicable whole and formal performance remain outstanding.
+After consumers and review,27 generated native/comparison files/1130234499bytes
+were retired. Keep latest whole252 failure payloads/receipts, frozen product,
+formal generations, old/new frozen carriers/std, backend archive, RED/source/
+result/runner/diagnostic and gen records through parent reconciliation, then
+reassess exact reproduction needs.
+[Retirement](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/retirement.json).
+com-ntm8 still owns masked existing fixture oracles; recognition relies on
+independent single-cause controls. Parent com-yeua/phase3, residual252, full
+green and main/seed promotion remain uncompleted.

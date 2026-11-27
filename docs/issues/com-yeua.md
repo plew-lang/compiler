@@ -13,22 +13,23 @@ tags: [diagnostics, frontend, driver, verification]
 
 ## Current boundary
 
-This parent remains open. Current normal20261126T030736-test-e1230a completes
-3314 cases (3313 shared source hashes unchanged plus new generated-part PASS),
-with254 failures and invariant inputs. met-jjsi resolves existing partfreefn
-only; no new failures or changed remaining reasons.
-[Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-item-refusals/whole.json).
+This parent remains open. Current normal20261127T031803-test-72ea07 completes
+3314 identical-source cases with252 failures and invariant inputs. met-iv6d
+resolves existing partdiamond/crossmodule with no new failures or changed
+remaining aggregate reasons.
+[Current whole](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/whole.json).
 
-met-un2r, com-p2qh, com-ctl6 and met-jjsi have independent finite recognition.
-FormalG2/median7.350680<=7.5 certifies the current product2d482923, not this
-parent or phase3. Saved measured8f5e342f1577 and frozen std are next development
-inputs; adoption/retention are in the [worklog](../../../agents/worklog.md).
-main/seed/tracked-bin remain separate.
+The finite membership producer is independently accepted at productc6720051.
+FormalG2/median7.325122<=7.5 and gen pass certify that candidate and finite
+change, not this parent or phase3. Saved measured594990c485aa/frozen std are
+next development inputs; current adoption/retention are in the
+[worklog](../../../agents/worklog.md). main/seed/tracked-bin are separate.
+com-ntm8 retains the older masked-oracle work; single-cause matrix/native
+controls establish membership correctness independently.
 
-Reconcile residual producer boundaries and existing owners before selecting
-another finite child; not every failure belongs to this parent. Message groups
-are investigative hints, never Source authority. Closed dependencies alone
-cannot establish parent completion.
+Reconcile residual producers and existing owners before selecting another
+finite child; not every failure belongs here. Message groups are investigative
+hints, never Source authority. Closed dependencies alone cannot prove closure.
 
 ## Contract and audit evidence
 
