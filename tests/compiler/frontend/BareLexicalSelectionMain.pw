@@ -1,0 +1,37 @@
+// Bare lexical associated names must retain their declaring Self root.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/BareLexical.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("lexical setup rejected: "+diagnostic.message()) }
+    }
+    val child = compiler.internBytes(s: "Child").nameId
+    val parent = compiler.internBytes(s: "Parent").nameId
+    mut val found = false
+    for index in 0U64..<compiler.decls.traitCount() {
+        val trait = compiler.decls.traitAt(index: index)
+        if trait.nameId != child { continue }
+        val requirement = compiler.traitReqAt(reqs: trait.reqs, index: 0U64)
+        val parameter = compiler.funcParamAt(params: requirement.params, index: 0U64)
+        val saved = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap()
+        if saved.isNone() { panic("bare lexical associated selection was not retained") }
+        val selected = saved.unwrap()
+        if selected.graph.roots[0U64].constraint.key.owner != trait.nameStart { panic("lexical selection lost original Child Self root") }
+        match selected.outcome {
+            AssociatedMemberOutcome.Unique(candidate: val candidate) => {
+                val owner = compiler.decls.traitIndexByOffset(offset: candidate.instance.owner)
+                if compiler.decls.traitAt(index: owner).nameId != parent { panic("lexical selection lost declaring Parent") }
+            }
+            _ => { panic("lexical associated selection was not unique") }
+        }
+        val nested = compiler.traitReqAt(reqs: trait.reqs, index: 1U64)
+        val nestedParameter = compiler.funcParamAt(params: nested.params, index: 0U64)
+        val nestedUse = compiler.sourceTypeUses.useAt(index: nestedParameter.authoredTypeUse-1U64).unwrap()
+        val nestedRecipe = compiler.sourceTypeUses.recipeAt(id: nestedUse.recipe).unwrap()
+        val receiverRecipe = compiler.sourceTypeUses.recipeAt(id: nestedRecipe.children[0U64]).unwrap()
+        val receiverSelection = compiler.retainedAssociatedSelection(occurrence: receiverRecipe.occurrence, ref: receiverRecipe.term).unwrap().unwrap()
+        if receiverSelection.graph.roots[0U64].constraint.key.owner != trait.nameStart { panic("nested lexical receiver lost original Child Self root") }
+        found = true
+    }
+    if !found { panic("lexical requirement setup missing") }
+}

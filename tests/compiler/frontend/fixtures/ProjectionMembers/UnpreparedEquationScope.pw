@@ -1,0 +1,6 @@
+trait Key { type Item }
+trait Parent[A] { type Output }
+trait Child[A]: Parent[A] + Parent[I64] {}
+trait Container[A] {}
+fn entry[T](item: T#Child[T#Key.Item].Output) where T: Container[T#Child[T#Key.Item].Output] + Key[Item=I64] + Child[T#Key.Item] {}
+fn main() {}

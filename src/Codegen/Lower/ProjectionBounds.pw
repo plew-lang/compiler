@@ -156,6 +156,14 @@ impl Comp {
             ProjectionBoundState.Failed(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
             _ => {}
         }
+        return self.projectionBoundDeclaredHead(id: id)
+    }
+
+    // Namespace identity is independent of preparation success. This reader
+    // lets dependency filtering precede consumption of a clause's state.
+    inout fn projectionBoundDeclaredHead(id: U64) -> Result[ResolvedViewSource, CompileDiagnostic] {
+        if id == 0U64 || id > self.projectionBoundClauses.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "source bound has an invalid declared head") /> }
+        val clause = self.projectionBoundClauses[id - 1U64]
         match clause.head { Optional.Some(v: val head) => { return <Result.Ok value=head /> } Optional.None => {} }
         val source = match clause.syntax {
             ProjectionBoundSyntax.Value(subject: _, traitType: val traitType, parameter: _) => {
@@ -294,5 +302,94 @@ impl Comp {
             }
         }
         return self.chooseShortProjectionSource(sources: sources, member: member, site: type.span.start)
+    }
+}
+
+
+// Determine the equation owners used by this namespace query from explicit
+// terms and reached headers. Binder substitution cannot invent a projection
+// owner absent from either an argument or one of these declared edge terms.
+impl Comp {
+    inout fn appendAssociatedSelectionDependencies(root: TraitBound, owners: inout Array[U64], site: U64) -> Result[(), CompileDiagnostic] {
+        mut val pending = [root.subject]
+        for argument in root.constraint.key.positionalArgs { pending.append(argument) }
+        for predicate in root.constraint.assocPredicates { pending.append(predicate.value) }
+        mut val traits = [root.constraint.key.owner]
+        mut val traitIndex = 0U64
+        while traitIndex < traits.count() {
+            val shape = try self.associatedMemberShape(owner: traits[traitIndex], site: site)
+            for index in 0U64..<shape.supertraits.len {
+                val edge = try self.associatedMemberEdgeConstraint(shape: shape, index: index, site: site)
+                for argument in edge.key.positionalArgs { pending.append(argument) }
+                for predicate in edge.assocPredicates { pending.append(predicate.value) }
+                mut val present = false
+                for owner in traits { if owner == edge.key.owner { present = true break } }
+                if !present {
+                    if traits.count() >= 128U64 { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
+                    traits.append(edge.key.owner)
+                }
+            }
+            traitIndex += 1U64
+        }
+        mut val visited: Set[U64] = Set.new()
+        mut val cursor = 0U64
+        while cursor < pending.count() {
+            val ref = pending[cursor]
+            cursor += 1U64
+            if visited.contains(ref) { continue }
+            visited.insert(ref)
+            if ref >= self.arena.typeTermCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection has an unknown equation dependency") /> }
+            val term = self.arena.typeTermAt(index: ref)
+            if term.assocNameId != 0U64 {
+                val owner = if term.hasAssocTraitDecl { give term.assocTraitDeclOffset } else { give term.assocTraitStart }
+                mut val present = false
+                for prior in owners { if prior == owner { present = true break } }
+                if !present { owners.append(owner) }
+            }
+            for index in 0U64..<self.typeTermRefChildCount(ref: ref) { pending.append(self.typeTermRefChildRef(ref: ref, index: index)) }
+        }
+        return <Result.Ok value=() />
+    }
+    inout fn prepareAssociatedSelectionEquations(root: TraitBound, site: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
+        mut val equations: Array[TraitBound] = []
+        val context = match self.activeProjectionBounds { Optional.Some(v: val context) => context Optional.None => { return <Result.Ok value=equations /> } }
+        if context.count() == 0U64 { return <Result.Ok value=equations /> }
+        mut val dependencies: Array[U64] = []
+        try self.appendAssociatedSelectionDependencies(root: root, owners: inout dependencies, site: site)
+        if dependencies.count() == 0U64 { return <Result.Ok value=equations /> }
+        mut val included: Set[U64] = Set.new()
+        mut val expanded: Set[U64] = Set.new()
+        mut val changed = true
+        while changed {
+            changed = false
+            for index in 0U64..<context.count() {
+                val id = context.clause(index: index)
+                if id == 0U64 || id > self.projectionBoundClauses.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection has an invalid bound clause") /> }
+                if expanded.contains(id) { continue }
+                val clause = self.projectionBoundClauses[id - 1U64]
+                val ready = match clause.state { ProjectionBoundState.Ready(bound: val bound) => <Optional.Some v=bound /> _ => <Optional.None /> }
+                if ready.isSome() && !included.contains(id) {
+                    val bound = ready.unwrap()
+                    equations.append(<TraitBound subject=bound.subject constraint=bound.constraint offset=site />)
+                    included.insert(id)
+                }
+                if dependencies.count() == 0U64 { continue }
+                val owner = if ready.isSome() { give ready.unwrap().constraint.key.owner } else { give (try self.projectionBoundDeclaredHead(id: id)).traitInstance.owner }
+                mut val needed = false
+                if owner != 0U64 {
+                    for dependency in dependencies {
+                        if try self.associatedMemberOwnerReachable(owner: owner, target: dependency, site: site) { needed = true break }
+                    }
+                }
+                if !needed { continue }
+                val bound = if ready.isSome() { give ready.unwrap() } else { give try self.preparedProjectionBound(id: id, requestSite: <Optional.Some v=site />) }
+                val equation = <TraitBound subject=bound.subject constraint=bound.constraint offset=site />
+                if !included.contains(id) { equations.append(equation) included.insert(id) }
+                expanded.insert(id)
+                try self.appendAssociatedSelectionDependencies(root: equation, owners: inout dependencies, site: site)
+                changed = true
+            }
+        }
+        return <Result.Ok value=equations />
     }
 }

@@ -834,7 +834,8 @@ pub impl Comp {
             if associated != 0U64 {
                 val viewed = self.typeRefWithAddedViewSources(ref: associated, additions: viewSources)
                 val resolved = self.arena.typeAt(index: viewed)
-                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed authoredChildren=(try self.lexicalAssociatedRecipeChildren(ref: viewed, sources: viewRecipes)) /> />
+                val children = try self.lexicalAssociatedRecipeChildren(ref: viewed, sources: viewRecipes)
+                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed authoredChildren=children associatedSelection=(try self.captureLoweredLexicalSelection(ref: viewed, site: t.span.start, children: children)) /> />
             }
         }
         val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=(if projection.isSome() { give 0U64 } else { give viewExtId }) viewIds=(if projection.isSome() { give [] } else { give viewIds }) viewSources=(if projection.isSome() { give [] } else { give viewSources }) isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)
@@ -1078,7 +1079,8 @@ pub impl Comp {
             if associated != 0U64 {
                 val viewed = self.typeRefWithAddedViewSources(ref: associated, additions: viewSources)
                 val resolved = self.arena.typeAt(index: viewed)
-                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed authoredChildren=(try self.lexicalAssociatedRecipeChildren(ref: viewed, sources: viewRecipes)) /> />
+                val children = try self.lexicalAssociatedRecipeChildren(ref: viewed, sources: viewRecipes)
+                return <Result.Ok value=<PType start=resolved.nameStart len=resolved.nameLen isArray=false ref=viewed authoredChildren=children associatedSelection=(try self.captureLoweredLexicalSelection(ref: viewed, site: t.span.start, children: children)) /> />
             }
         }
         val ref: U64 = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=(if projection.isSome() { give 0U64 } else { give viewExtId }) viewIds=(if projection.isSome() { give [] } else { give viewIds }) viewSources=(if projection.isSome() { give [] } else { give viewSources }) isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable isDiverging=t.isDiverging siteOffset=site />)

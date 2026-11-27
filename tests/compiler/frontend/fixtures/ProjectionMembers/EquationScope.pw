@@ -1,0 +1,6 @@
+trait Key { type Item }
+trait Parent[A] { type Output }
+trait Child[A]: Parent[A] + Parent[I64] {}
+trait Unrelated {}
+fn entry[T](item: T#Child[T#Key.Item].Output) where T: Child[T#Key.Item] + Key[Item=I64] + Unrelated {}
+fn main() {}

@@ -100,7 +100,7 @@ impl Comp {
             // The written head is itself an associated type selection.
             // Preserve its occurrence so the outer projection must consume it.
             val children = try self.lexicalAssociatedRecipeChildren(ref: ref, sources: sources)
-            val selection = try self.captureLoweredAssociatedSelection(ref: ref, site: site, children: children)
+            val selection = try self.captureLoweredLexicalSelection(ref: ref, site: site, children: children)
             val occurrence = self.recordAuthoredTypeUse(ref: ref, site: site, children: children)
             try self.bindLoweredAssociatedSelection(selection: selection, occurrence: occurrence)
             return <Result.Ok value=self.sourceTypeUses.useAt(index: occurrence - 1U64).unwrap().recipe />

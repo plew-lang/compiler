@@ -104,17 +104,36 @@ unfinished. Continue with separate original-root proof and declaring-instance
 recipe/publication; do not merely rewrite the canonical owner and drop Child.
 
 
-Checkpoint API review confirms the occurrence/token mechanism is suitable and
-not conformance authority, but identifies unfinished B guarantees that must be
-resolved before canonical publication:
-- Current capture takes only Ready equations. Determine required equation
-  dependencies and prepare/propagate their Unlowered/Lowering/Failed state;
-  do not silently save an answer from incomplete relevant context, and do not
-  eagerly lower every unrelated bound.
-- Bare lexical-associated early returns in both adapters bypass final capture;
-  connect those as well as the already-covered nested receiver creation.
-- Separate authored-root identity from resolved-term identity in the retained
-  record. Current same-root/term check is valid only before Parent publication.
-  Keep authored and derived argument recipe lists distinct when arity changes.
-Native v8 repeats the A query/Raw graph controls successfully with this new
-Source capture active. This does not certify the outstanding B gaps above.
+## Readiness and lexical retention checkpoint
+
+Bare lexical early returns in both adapters and the nested lexical receiver
+record now use captureLoweredLexicalSelection with the original Child/Self root.
+The record separates publishedInstance/publishedArguments from authored root
+recipes; Parent canonical publication must still preserve the latter.
+
+Required equation owners are collected from explicit root terms and reached
+header edge terms. Relevant non-Ready premises go through the existing
+preparedProjectionBound state machine. Head-only identity lookup is separate
+from consuming Failed/Lowering; no unrelated Failed may propagate before the
+owner dependency check. Empty contexts/dependency sets return without walking
+unrelated clauses. Further dependency qualification by receiver must be checked
+before certifying the complete source-scope guarantee: same-owner bounds on a
+different binder must not cause artificial recursive preparation. Use the
+existing pending subject matching/binder contracts, not name equality.
+
+Finite native evidence in meta projection-members includes lexical/nested RED
+and GREEN, required Failed/Lowering preservation, irrelevant same-state control,
+and a real Unlowered Key equation reached while lowering an earlier Container
+bound's projected argument (old Source rejects, new Source accepts). The initial
+normal EquationScope input already passed and is a GREEN control, not RED.
+Setup failures are excluded. Final-source noninterference controls and source
+re-review are retained separately from the earlier checkpoint results.
+
+Independent incremental review confirmed the saved-root/published-instance
+separation and dependency traversal direction. It found two concrete gaps:
+state consumption before owner filtering and nested lexical default-root
+capture. Both have specific REDs and source fixes; re-review confirms those
+paths are removed. This is not B completion: remaining work is receiver-sensitive
+readiness where needed, canonical declaring-instance publication/derived recipes,
+separate authored-root and declaring evidence, competing selection removal and
+final consumer/AOT/ORC certification. Owned refusal remains C.

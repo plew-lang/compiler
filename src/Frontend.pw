@@ -765,12 +765,14 @@ struct AdmittedTraitConstraintOperands {
 impl AdmittedTraitConstraintOperands { factory }
 // Semantic query retention is not conformance admission authority.
 struct LoweredAssociatedSelection {
+    val publishedInstance: TraitInstanceKey
+    val authoredArguments: Array[U64]
     val session: U64
     val member: U64
     val term: U64
     val site: U64
     val scope: U64
-    val arguments: Array[U64]
+    val publishedArguments: Array[U64]
     val result: AssociatedMemberResult
 }
 impl LoweredAssociatedSelection { factory }

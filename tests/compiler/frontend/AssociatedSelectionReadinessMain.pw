@@ -1,0 +1,76 @@
+// Independent source equations must be prepared before saving the decision.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/EquationScope.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("equation-scope admission rejected: "+diagnostic.message()) }
+    }
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
+    val function = compiler.arena.functionAt(index: index)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val saved = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+    match saved.outcome {
+        AssociatedMemberOutcome.Unique(candidate: val candidate) => {
+            if candidate.instance.positionalArgs.count() != 1U64 || saved.graph.equations.count() == 0U64 { panic("source equation did not justify instance deduplication") }
+        }
+        _ => { panic("source query was saved before required equations were ready") }
+    }
+    val use = compiler.sourceTypeUses.useAt(index: parameter.authoredTypeUse - 1U64).unwrap()
+    val recipe = compiler.sourceTypeUses.recipeAt(id: use.recipe).unwrap()
+    val key = compiler.internBytes(s: "Key").nameId
+    mut val slot = compiler.projectionBoundClauses.count()
+    for index in 0U64..<compiler.projectionBoundClauses.count() {
+        val clause = compiler.projectionBoundClauses[index]
+        val bound = match clause.state { ProjectionBoundState.Ready(bound: val bound) => bound _ => { continue } }
+        val owner = compiler.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
+        if owner < compiler.decls.traitCount() && compiler.decls.traitAt(index: owner).nameId == key { slot = index break }
+    }
+    if slot == compiler.projectionBoundClauses.count() { panic("required equation clause setup missing") }
+    val clause = compiler.projectionBoundClauses[slot]
+    val oldScope = compiler.sourceTypeUses.currentScope()
+    val oldContext = compiler.activeProjectionBounds
+    compiler.sourceTypeUses.selectionProbeScope(scope: clause.scope)
+    compiler.activeProjectionBounds = <Optional.Some v=<ProjectionBoundContext own=<SourceBoundRange first=slot+1U64 count=1U64 /> inherited=<SourceBoundRange /> /> />
+    for lowering in [false, true] {
+        val failed = <CompileDiagnostic failureDomain=<FailureDomain.Input /> location=<DiagnosticLocation.Unpositioned /> message="failed equation prerequisite" />
+        val state = if lowering { give <ProjectionBoundState.Lowering /> } else { give <ProjectionBoundState.Failed diagnostic=failed /> }
+        compiler.projectionBoundClauses[slot] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject head=clause.head state=state />
+        match compiler.captureLoweredAssociatedSelection(ref: parameter.ty, site: use.site, children: recipe.children) {
+            Result.Ok(value: _) => { panic("required equation state was silently discarded") }
+            Result.Err(error: val diagnostic) => {
+                if lowering { match diagnostic.failureDomain() { FailureDomain.Limit => {} _ => { panic("recursive equation did not retain Limit") } } }
+                else { if diagnostic.message() != failed.message() { panic("failed equation cause was replaced") } }
+            }
+        }
+        // The same not-ready equation is irrelevant to direct Key.Item lookup.
+        val projection = compiler.arena.typeAt(index: parameter.ty)
+        val direct = projection.assocTraitArgs[0U64]
+        compiler.captureLoweredAssociatedSelection(ref: direct, site: use.site, children: []).unwrap()
+    }
+    compiler.projectionBoundClauses[slot] = clause
+    val unrelatedName = compiler.internBytes(s: "Unrelated").nameId
+    mut val unrelatedSlot = compiler.projectionBoundClauses.count()
+    mut val first = compiler.projectionBoundClauses.count()
+    mut val last = 0U64
+    for index in 0U64..<compiler.projectionBoundClauses.count() {
+        val candidate = compiler.projectionBoundClauses[index]
+        if candidate.scope != clause.scope { continue }
+        if index < first { first = index }
+        last = index
+        val bound = match candidate.state { ProjectionBoundState.Ready(bound: val bound) => bound _ => { continue } }
+        val owner = compiler.decls.traitIndexByOffset(offset: bound.constraint.key.owner)
+        if owner < compiler.decls.traitCount() && compiler.decls.traitAt(index: owner).nameId == unrelatedName { unrelatedSlot = index }
+    }
+    if unrelatedSlot == compiler.projectionBoundClauses.count() { panic("unrelated equation clause setup missing") }
+    val unrelated = compiler.projectionBoundClauses[unrelatedSlot]
+    compiler.activeProjectionBounds = <Optional.Some v=<ProjectionBoundContext own=<SourceBoundRange first=first+1U64 count=last-first+1U64 /> inherited=<SourceBoundRange /> /> />
+    for lowering in [false, true] {
+        val state = if lowering { give <ProjectionBoundState.Lowering /> } else { give <ProjectionBoundState.Failed diagnostic=<CompileDiagnostic failureDomain=<FailureDomain.Input /> location=<DiagnosticLocation.Unpositioned /> message="unrelated prerequisite failed" /> /> }
+        compiler.projectionBoundClauses[unrelatedSlot] = <ProjectionBoundClause scope=unrelated.scope parameters=unrelated.parameters syntax=unrelated.syntax syntheticSubject=unrelated.syntheticSubject head=unrelated.head state=state />
+        match compiler.captureLoweredAssociatedSelection(ref: parameter.ty, site: use.site, children: recipe.children) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic("unrelated equation state interfered: "+diagnostic.message()) } }
+    }
+    compiler.projectionBoundClauses[unrelatedSlot] = unrelated
+    compiler.activeProjectionBounds = oldContext
+    compiler.sourceTypeUses.selectionProbeScope(scope: oldScope)
+
+}
