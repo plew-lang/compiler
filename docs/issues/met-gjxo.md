@@ -124,5 +124,7 @@ inputs unchanged, samples7.782508/7.359985/7.306692s, median7.359985s<=7.5.
 Same-source alternating comparison: old594990c485aa median7.393742s versus
 new fresh v2 median7.346164s; all6 LLVM hashes equal. This does not establish a
 performance improvement; it finds no measured regression. The exact formal
-measured binary da2c8c0a82e9 passes48/48 public controls. Generation gate is
-running; whole-suite reconciliation, final review and cleanup remain open.
+measured binary da2c8c0a82e9 passes48/48 public controls. Generation20261127T053546-gen-54ed7b passed with invariant inputs. Whole
+20261127T053719-test-48c29a is running against the formal measured binary;
+case/source identity and the existing252-failure baseline require reconciliation.
+Final review and cleanup remain open.
