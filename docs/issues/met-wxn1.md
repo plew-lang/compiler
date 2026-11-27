@@ -116,10 +116,14 @@ header edge terms. Relevant non-Ready premises go through the existing
 preparedProjectionBound state machine. Head-only identity lookup is separate
 from consuming Failed/Lowering; no unrelated Failed may propagate before the
 owner dependency check. Empty contexts/dependency sets return without walking
-unrelated clauses. Further dependency qualification by receiver must be checked
-before certifying the complete source-scope guarantee: same-owner bounds on a
-different binder must not cause artificial recursive preparation. Use the
-existing pending subject matching/binder contracts, not name equality.
+unrelated clauses. PreparedProjectionSubject stores only the exact term and recipe before the RHS,
+with its own Unlowered/Lowering/Ready/Failed state. It is reused by full bound
+preparation in the original declaration frame; it is not an admitted constraint.
+Dependencies retain complete substituted receiver terms, using the common
+symbolic graph rather than spelling or trait-owner identity alone. Prepared
+subject and dependency receiver compare under available equations via the common
+normalizer. The memo is reset when the append-only equation context grows; subject
+projections add further dependencies and trigger another pass.
 
 Finite native evidence in meta projection-members includes lexical/nested RED
 and GREEN, required Failed/Lowering preservation, irrelevant same-state control,
@@ -133,7 +137,26 @@ Independent incremental review confirmed the saved-root/published-instance
 separation and dependency traversal direction. It found two concrete gaps:
 state consumption before owner filtering and nested lexical default-root
 capture. Both have specific REDs and source fixes; re-review confirms those
-paths are removed. This is not B completion: remaining work is receiver-sensitive
-readiness where needed, canonical declaring-instance publication/derived recipes,
+paths are removed. This is not B completion: remaining work is canonical declaring-instance publication/derived recipes,
 separate authored-root and declaring evidence, competing selection removal and
 final consumer/AOT/ORC certification. Owned refusal remains C.
+
+
+The receiver refinement has actual Source REDs: preparing U:Key while a T:Key
+output is required previously caused a false recursive Limit; and Link[Next=U]
+was ignored when matching Wrapper[T#Link.Next] with Wrapper[U]. Both pass after
+subject separation and equation-aware comparison. The final saved
+selection-native-suite.json runs nine profiles on one unchanged snapshot:
+Raw query graph, occurrence retention, bare/nested lexical roots, prerequisite
+states/noninterference, actual Unlowered preparation, distinct binders, receiver
+equality, a different V receiver remaining ambiguous, and value-AST lowering with
+fresh binders and restored frame. The distinct-receiver control checks the saved
+semantic outcome, not the unfinished C diagnostic wording. Legacy raw lowering
+is not presented as completed Source/admitted-program certification.
+
+Independent source review confirmed the receiver/context changes and no further
+required issue in that slice. Complete B certification still requires canonical
+Parent publication, explicit authored source selector/proof provenance (including
+aliases), derived Parent recipes and instantiation/final consumer checks. The
+review notes graph/reachability reconstruction as optional cost work absent a
+measured regression; performance adoption remains the saved149aac baseline.

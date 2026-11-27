@@ -1,0 +1,22 @@
+// An equality to U cannot select a Key equation whose subject is Wrapper[V].
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ReceiverDistinctScope.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => { panic("distinct receiver source was accepted") }
+        Result.Err(error: _) => {}
+    }
+    val child = compiler.internBytes(s: "Child").nameId
+    val output = compiler.internBytes(s: "Output").nameId
+    mut val found = false
+    for draft in compiler.loweredAssociatedSelections {
+        if draft.member != output { continue }
+        val owner = compiler.decls.traitIndexByOffset(offset: draft.result.graph.roots[0U64].constraint.key.owner)
+        if owner >= compiler.decls.traitCount() || compiler.decls.traitAt(index: owner).nameId != child { continue }
+        match draft.result.outcome {
+            AssociatedMemberOutcome.Ambiguous(candidates: val candidates) => { if candidates.count() != 2U64 { panic("distinct receiver candidate count lost") } }
+            _ => { panic("equation for a different receiver selected the output") }
+        }
+        found = true
+    }
+    if !found { panic("distinct receiver source query was not reached") }
+}

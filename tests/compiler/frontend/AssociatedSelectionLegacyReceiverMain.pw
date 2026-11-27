@@ -1,0 +1,27 @@
+use @Plew/Syntax only { parseItem }
+// Value-AST lowering must use the same prepared subjects and binder identity.
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ReceiverEquationScope.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    val text = "fn legacyEntry[T,U](item: T#Child[T#Key.Item].Output) where U: Key[Item=T#Child[T#Key.Item].Output], T: Key[Item=I64] + Child[T#Key.Item] {{}}"
+    mut val offset = 0U64
+    while offset + text.bytes().count() <= compiler.arena.bytes.count() {
+        if rangeEquals(bytes: compiler.arena.bytes, start: offset, len: text.bytes().count(), kw: text) { break }
+        offset += 1U64
+    }
+    if offset + text.bytes().count() > compiler.arena.bytes.count() { panic("value AST source setup missing") }
+    val declaration = match parseItem(source: text, start: offset, end: offset+text.bytes().count()) {
+        TopItemAst.Decl(d: val declaration) => declaration
+        _ => { panic("value AST function setup missing") }
+    }
+    compiler.lowerFuncDecl(d: declaration).unwrap()
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "legacyEntry").nameId)
+    val function = compiler.arena.functionAt(index: index)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val selected = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+    match selected.outcome {
+        AssociatedMemberOutcome.Unique(candidate: _) => {}
+        _ => { panic("value AST query mixed another receiver's preparation") }
+    }
+    if compiler.sourceTypeUses.currentScope() != 0U64 || compiler.lowerProjectionDepth != 0U64 { panic("value AST lowering leaked its source frame") }
+}

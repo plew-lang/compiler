@@ -34,7 +34,7 @@ fn main() {
     for lowering in [false, true] {
         val failed = <CompileDiagnostic failureDomain=<FailureDomain.Input /> location=<DiagnosticLocation.Unpositioned /> message="failed equation prerequisite" />
         val state = if lowering { give <ProjectionBoundState.Lowering /> } else { give <ProjectionBoundState.Failed diagnostic=failed /> }
-        compiler.projectionBoundClauses[slot] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject head=clause.head state=state />
+        compiler.projectionBoundClauses[slot] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject subject=clause.subject head=clause.head state=state />
         match compiler.captureLoweredAssociatedSelection(ref: parameter.ty, site: use.site, children: recipe.children) {
             Result.Ok(value: _) => { panic("required equation state was silently discarded") }
             Result.Err(error: val diagnostic) => {
@@ -66,7 +66,7 @@ fn main() {
     compiler.activeProjectionBounds = <Optional.Some v=<ProjectionBoundContext own=<SourceBoundRange first=first+1U64 count=last-first+1U64 /> inherited=<SourceBoundRange /> /> />
     for lowering in [false, true] {
         val state = if lowering { give <ProjectionBoundState.Lowering /> } else { give <ProjectionBoundState.Failed diagnostic=<CompileDiagnostic failureDomain=<FailureDomain.Input /> location=<DiagnosticLocation.Unpositioned /> message="unrelated prerequisite failed" /> /> }
-        compiler.projectionBoundClauses[unrelatedSlot] = <ProjectionBoundClause scope=unrelated.scope parameters=unrelated.parameters syntax=unrelated.syntax syntheticSubject=unrelated.syntheticSubject head=unrelated.head state=state />
+        compiler.projectionBoundClauses[unrelatedSlot] = <ProjectionBoundClause scope=unrelated.scope parameters=unrelated.parameters syntax=unrelated.syntax syntheticSubject=unrelated.syntheticSubject subject=unrelated.subject head=unrelated.head state=state />
         match compiler.captureLoweredAssociatedSelection(ref: parameter.ty, site: use.site, children: recipe.children) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic("unrelated equation state interfered: "+diagnostic.message()) } }
     }
     compiler.projectionBoundClauses[unrelatedSlot] = unrelated

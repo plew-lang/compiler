@@ -1,0 +1,8 @@
+trait Link { type Next }
+trait Key { type Item }
+trait Parent[A] { type Output }
+trait Child[A]: Parent[A] + Parent[I64] {}
+trait Container[A] {}
+struct Wrapper[X] {}
+fn entry[T,U](item: T#Child[Wrapper[T#Link.Next]#Key.Item].Output) where T: Container[T#Child[Wrapper[T#Link.Next]#Key.Item].Output], Wrapper[U]: Key[Item=I64], T: Link[Next=U] + Child[Wrapper[T#Link.Next]#Key.Item] {}
+fn main() {}

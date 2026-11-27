@@ -727,11 +727,28 @@ impl ProjectionBoundContext {
     }
 }
 
+struct PreparedProjectionSubject {
+    val term: U64
+    val recipe: U64
+}
+impl PreparedProjectionSubject { factory }
+enum ProjectionBoundSubjectState {
+    Unlowered
+    Lowering
+    Ready(subject: PreparedProjectionSubject)
+    Failed(diagnostic: CompileDiagnostic)
+}
+struct AssociatedSelectionDependency {
+    val owner: U64
+    val receiver: U64
+}
+impl AssociatedSelectionDependency { factory }
 struct ProjectionBoundClause {
     val scope: U64
     val parameters: Array[U64]
     val syntax: ProjectionBoundSyntax
     val syntheticSubject: Bool = false
+    val subject: ProjectionBoundSubjectState = <ProjectionBoundSubjectState.Unlowered />
     val head: Optional[ResolvedViewSource] = <Optional.None />
     val state: ProjectionBoundState = <ProjectionBoundState.Unlowered />
 }

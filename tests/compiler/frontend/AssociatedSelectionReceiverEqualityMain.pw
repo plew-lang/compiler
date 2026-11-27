@@ -1,0 +1,18 @@
+// Independent source equations must be prepared before saving the decision.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ReceiverEqualityScope.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("equation-scope admission rejected: "+diagnostic.message()) }
+    }
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
+    val function = compiler.arena.functionAt(index: index)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val saved = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+    match saved.outcome {
+        AssociatedMemberOutcome.Unique(candidate: val candidate) => {
+            if candidate.instance.positionalArgs.count() != 1U64 || saved.graph.equations.count() == 0U64 { panic("source equation did not justify instance deduplication") }
+        }
+        _ => { panic("source query was saved before required equations were ready") }
+    }
+}

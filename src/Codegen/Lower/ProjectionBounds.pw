@@ -84,37 +84,74 @@ impl Comp {
             SourceTypeUseRole.Declaration => {}
             _ => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "source bound must be prepared before parameter defaults and bodies", failureDomain: <FailureDomain.Internal />) /> }
         }
-        self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject head=clause.head state=<ProjectionBoundState.Lowering /> />
-        val result = self.lowerProjectionBoundClause(clause: clause)
+        self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject subject=clause.subject head=clause.head state=<ProjectionBoundState.Lowering /> />
+        val result = self.lowerProjectionBoundClause(id: id, clause: clause)
         val state = match result {
             Result.Ok(value: val bound) => <ProjectionBoundState.Ready bound=bound />,
             Result.Err(error: val diagnostic) => <ProjectionBoundState.Failed diagnostic=diagnostic />,
         }
         val completed = self.projectionBoundClauses[id - 1U64]
-        self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject head=completed.head state=state />
+        self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject subject=completed.subject head=completed.head state=state />
         if result.isOk() { self.recordBoundTypeDeclarationRoots(clause: id) }
         return result
     }
 
-    inout fn lowerProjectionBoundClause(clause: ProjectionBoundClause) -> Result[PreparedProjectionBound, CompileDiagnostic] {
-        match clause.syntax {
-            ProjectionBoundSyntax.Value(subject: val subject, traitType: val traitType, parameter: val parameter) => {
-                // A legacy name-only row has no authored subject TypeAst.
-                // Construct its binder term without issuing a fictitious use.
-                val loweredSubject = if clause.syntheticSubject { give (try self.lowerTypeCore(t: (try self.normalizeProjectionType(t: subject)))) } else { give (try self.lowerType(t: subject)) }
-                val type = try self.normalizeProjectionType(t: traitType)
-                val head = if clause.head.isSome() { give clause.head.unwrap() } else {
-                    give try self.valueWhereTraitHead(traitType: type, origin: <Optional.Some v=self.sourceTypeUses.scopeAt(token: clause.scope).unwrap().anchor />)
-                }
-                val lowered = try self.lowerValueTraitConstraint(traitType: type, owner: head.traitInstance.owner, site: head.writtenStart)
-                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments subjectRecipe=(if clause.syntheticSubject { give 0U64 } else { give try self.authoredChildRecipe(type: loweredSubject) }) predicateRecipes=lowered.predicateRecipes parameter=parameter /> />
+    // Subject identity is a separate prerequisite of the constraint RHS.
+    // Preserve its exact occurrence and propagate genuine subject recursion.
+    inout fn preparedProjectionSubject(id: U64) -> Result[PreparedProjectionSubject, CompileDiagnostic] {
+        if id == 0U64 || id > self.projectionBoundClauses.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "source bound has an invalid subject owner") /> }
+        val clause = self.projectionBoundClauses[id - 1U64]
+        if clause.scope == 0U64 || self.sourceTypeUses.projectionBoundScope() == 0U64 { return <Result.Err error=self.associatedMemberInputFailure(message: "source bound subject has no declaration frame") /> }
+        if clause.scope != self.sourceTypeUses.currentScope() {
+            val active = self.sourceTypeUses.projectionBoundScope()
+            val current = self.sourceTypeUses.scopeAt(token: active)
+            if clause.scope != active && (!current.isSome() || current.unwrap().parent != clause.scope) { return <Result.Err error=self.associatedMemberInputFailure(message: "foreign source bound subject") /> }
+            match clause.subject {
+                ProjectionBoundSubjectState.Ready(subject: val subject) => { return <Result.Ok value=subject /> }
+                _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "parent source bound subject was not prepared") /> }
             }
-            ProjectionBoundSyntax.Syntax(subject: val subject, traitType: val traitType, parameter: val parameter) => {
-                val loweredSubject = try self.lowerSyntaxType(id: subject)
+        }
+        match clause.subject {
+            ProjectionBoundSubjectState.Ready(subject: val subject) => { return <Result.Ok value=subject /> }
+            ProjectionBoundSubjectState.Failed(diagnostic: val diagnostic) => { return <Result.Err error=diagnostic /> }
+            ProjectionBoundSubjectState.Lowering => { return <Result.Err error=self.associatedMemberLimit(site: self.sourceTypeUses.scopeAt(token: clause.scope).unwrap().anchor) /> }
+            ProjectionBoundSubjectState.Unlowered => {}
+        }
+        if clause.scope != self.sourceTypeUses.currentScope() || clause.parameters.count() != self.cur.typeParams.count() { return <Result.Err error=self.associatedMemberInputFailure(message: "source bound subject must be prepared in its original declaration") /> }
+        for index in 0U64..<clause.parameters.count() { if clause.parameters[index] != self.cur.typeParams[index].paramId { return <Result.Err error=self.associatedMemberInputFailure(message: "source bound subject has a foreign binder") /> } }
+        match self.sourceTypeUses.currentRole() { SourceTypeUseRole.Declaration => {} _ => { return <Result.Err error=self.associatedMemberInputFailure(message: "source bound subject must be prepared before defaults and bodies") /> } }
+        self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject subject=<ProjectionBoundSubjectState.Lowering /> head=clause.head state=clause.state />
+        val result = self.lowerProjectionBoundSubject(clause: clause)
+        val state = match result { Result.Ok(value: val subject) => <ProjectionBoundSubjectState.Ready subject=subject /> Result.Err(error: val diagnostic) => <ProjectionBoundSubjectState.Failed diagnostic=diagnostic /> }
+        val current = self.projectionBoundClauses[id - 1U64]
+        self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject subject=state head=current.head state=current.state />
+        return result
+    }
+    inout fn lowerProjectionBoundSubject(clause: ProjectionBoundClause) -> Result[PreparedProjectionSubject, CompileDiagnostic] {
+        val lowered = match clause.syntax {
+            ProjectionBoundSyntax.Value(subject: val subject, traitType: _, parameter: _) => {
+                give if clause.syntheticSubject { give try self.lowerTypeCore(t: (try self.normalizeProjectionType(t: subject))) }
+                else { give try self.lowerType(t: subject) }
+            }
+            ProjectionBoundSyntax.Syntax(subject: val subject, traitType: _, parameter: _) => (try self.lowerSyntaxType(id: subject))
+        }
+        val recipe = if clause.syntheticSubject { give 0U64 } else { give try self.authoredChildRecipe(type: lowered) }
+        return <Result.Ok value=<PreparedProjectionSubject term=lowered.ref recipe=recipe /> />
+    }
+    inout fn lowerProjectionBoundClause(id: U64, clause: ProjectionBoundClause) -> Result[PreparedProjectionBound, CompileDiagnostic] {
+        val loweredSubject = try self.preparedProjectionSubject(id: id)
+        match clause.syntax {
+            ProjectionBoundSyntax.Value(subject: _, traitType: val traitType, parameter: val parameter) => {
+                val type = try self.normalizeProjectionType(t: traitType)
+                val head = try self.projectionBoundDeclaredHead(id: id)
+                val lowered = try self.lowerValueTraitConstraint(traitType: type, owner: head.traitInstance.owner, site: head.writtenStart)
+                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.term constraint=lowered.constraint arguments=lowered.arguments subjectRecipe=loweredSubject.recipe predicateRecipes=lowered.predicateRecipes parameter=parameter /> />
+            }
+            ProjectionBoundSyntax.Syntax(subject: _, traitType: val traitType, parameter: val parameter) => {
                 val type = try self.resolveSyntaxTypePath(t: syntaxType(file: self.syntax, id: traitType))
-                val head = if clause.head.isSome() { give clause.head.unwrap() } else { give try self.syntaxWhereTraitHead(traitType: type) }
+                val head = try self.projectionBoundDeclaredHead(id: id)
                 val lowered = try self.lowerSyntaxTraitConstraint(traitType: type, owner: head.traitInstance.owner, site: head.writtenStart)
-                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.ref constraint=lowered.constraint arguments=lowered.arguments subjectRecipe=(try self.authoredChildRecipe(type: loweredSubject)) predicateRecipes=lowered.predicateRecipes parameter=<Bind nameStart=parameter.start nameLen=parameter.end - parameter.start nameId=intern(c: inout self, start: parameter.start, len: parameter.end - parameter.start) fieldStart=0U64 fieldLen=0U64 /> /> />
+                return <Result.Ok value=<PreparedProjectionBound source=head.withArguments(arguments: lowered.constraint.key.positionalArgs) subject=loweredSubject.term constraint=lowered.constraint arguments=lowered.arguments subjectRecipe=loweredSubject.recipe predicateRecipes=lowered.predicateRecipes parameter=<Bind nameStart=parameter.start nameLen=parameter.end - parameter.start nameId=intern(c: inout self, start: parameter.start, len: parameter.end - parameter.start) fieldStart=0U64 fieldLen=0U64 /> /> />
             }
         }
     }
@@ -175,7 +212,7 @@ impl Comp {
                 give try self.syntaxWhereTraitHead(traitType: type)
             }
         }
-        self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject head=<Optional.Some v=source /> state=clause.state />
+        self.projectionBoundClauses[id - 1U64] = <ProjectionBoundClause scope=clause.scope parameters=clause.parameters syntax=clause.syntax syntheticSubject=clause.syntheticSubject subject=clause.subject head=<Optional.Some v=source /> state=clause.state />
         return <Result.Ok value=source />
     }
 
@@ -310,27 +347,21 @@ impl Comp {
 // terms and reached headers. Binder substitution cannot invent a projection
 // owner absent from either an argument or one of these declared edge terms.
 impl Comp {
-    inout fn appendAssociatedSelectionDependencies(root: TraitBound, owners: inout Array[U64], site: U64) -> Result[(), CompileDiagnostic] {
-        mut val pending = [root.subject]
-        for argument in root.constraint.key.positionalArgs { pending.append(argument) }
-        for predicate in root.constraint.assocPredicates { pending.append(predicate.value) }
-        mut val traits = [root.constraint.key.owner]
-        mut val traitIndex = 0U64
-        while traitIndex < traits.count() {
-            val shape = try self.associatedMemberShape(owner: traits[traitIndex], site: site)
-            for index in 0U64..<shape.supertraits.len {
-                val edge = try self.associatedMemberEdgeConstraint(shape: shape, index: index, site: site)
-                for argument in edge.key.positionalArgs { pending.append(argument) }
-                for predicate in edge.assocPredicates { pending.append(predicate.value) }
-                mut val present = false
-                for owner in traits { if owner == edge.key.owner { present = true break } }
-                if !present {
-                    if traits.count() >= 128U64 { return <Result.Err error=self.associatedMemberLimit(site: site) /> }
-                    traits.append(edge.key.owner)
-                }
-            }
-            traitIndex += 1U64
+    inout fn appendAssociatedSelectionDependencies(root: TraitBound, dependencies: inout Array[AssociatedSelectionDependency], site: U64) -> Result[(), CompileDiagnostic] {
+        // Reuse the explicit-substitution graph, so Self and trait parameters
+        // in inherited edges name this query's receiver and actual arguments.
+        mut val work = <AssociatedMemberQueryWork context=[root] />
+        val index = try self.associatedMemberEquationGraph(context: 0U64, site: site, work: inout work)
+        mut val pending: Array[U64] = []
+        for bound in work.graphs[index].nodes {
+            pending.append(bound.subject)
+            for argument in bound.constraint.key.positionalArgs { pending.append(argument) }
+            for predicate in bound.constraint.assocPredicates { pending.append(predicate.value) }
         }
+        return self.appendAssociatedSelectionTermDependencies(terms: pending, dependencies: inout dependencies)
+    }
+    inout fn appendAssociatedSelectionTermDependencies(terms: Array[U64], dependencies: inout Array[AssociatedSelectionDependency]) -> Result[(), CompileDiagnostic] {
+        mut val pending = terms
         mut val visited: Set[U64] = Set.new()
         mut val cursor = 0U64
         while cursor < pending.count() {
@@ -339,26 +370,35 @@ impl Comp {
             if visited.contains(ref) { continue }
             visited.insert(ref)
             if ref >= self.arena.typeTermCount() { return <Result.Err error=self.associatedMemberInputFailure(message: "associated selection has an unknown equation dependency") /> }
-            val term = self.arena.typeTermAt(index: ref)
+            val term = self.arena.typeAt(index: ref)
             if term.assocNameId != 0U64 {
-                val owner = if term.hasAssocTraitDecl { give term.assocTraitDeclOffset } else { give term.assocTraitStart }
+                val owner = self.associatedProjectionTraitOwner(projection: term)
+                val receiver = self.typeTermProjectionReceiver(t: term)
                 mut val present = false
-                for prior in owners { if prior == owner { present = true break } }
-                if !present { owners.append(owner) }
+                for prior in dependencies { if prior.owner == owner && self.typeRefEq(a: prior.receiver, b: receiver, sourceTerms: true) { present = true break } }
+                if !present { dependencies.append(<AssociatedSelectionDependency owner=owner receiver=receiver />) }
             }
             for index in 0U64..<self.typeTermRefChildCount(ref: ref) { pending.append(self.typeTermRefChildRef(ref: ref, index: index)) }
         }
         return <Result.Ok value=() />
     }
+    inout fn associatedSelectionReceiversEqual(subject: U64, receiver: U64, site: U64, work: inout AssociatedMemberQueryWork) -> Result[Bool, CompileDiagnostic] {
+        if self.typeRefEq(a: subject, b: receiver, sourceTerms: true) { return <Result.Ok value=true /> }
+        val normalizedSubject = try self.normalizeAssociatedMemberTerm(ref: subject, site: site, depth: 0U64, active: [], work: inout work)
+        val normalizedReceiver = try self.normalizeAssociatedMemberTerm(ref: receiver, site: site, depth: 0U64, active: [], work: inout work)
+        return <Result.Ok value=self.typeRefEq(a: normalizedSubject, b: normalizedReceiver, sourceTerms: true) />
+    }
     inout fn prepareAssociatedSelectionEquations(root: TraitBound, site: U64) -> Result[Array[TraitBound], CompileDiagnostic] {
         mut val equations: Array[TraitBound] = []
         val context = match self.activeProjectionBounds { Optional.Some(v: val context) => context Optional.None => { return <Result.Ok value=equations /> } }
         if context.count() == 0U64 { return <Result.Ok value=equations /> }
-        mut val dependencies: Array[U64] = []
-        try self.appendAssociatedSelectionDependencies(root: root, owners: inout dependencies, site: site)
+        mut val dependencies: Array[AssociatedSelectionDependency] = []
+        try self.appendAssociatedSelectionDependencies(root: root, dependencies: inout dependencies, site: site)
         if dependencies.count() == 0U64 { return <Result.Ok value=equations /> }
         mut val included: Set[U64] = Set.new()
         mut val expanded: Set[U64] = Set.new()
+        mut val normalization = <AssociatedMemberQueryWork context=[root] />
+        mut val normalizationCount = 0U64
         mut val changed = true
         while changed {
             changed = false
@@ -378,7 +418,18 @@ impl Comp {
                 mut val needed = false
                 if owner != 0U64 {
                     for dependency in dependencies {
-                        if try self.associatedMemberOwnerReachable(owner: owner, target: dependency, site: site) { needed = true break }
+                        if !(try self.associatedMemberOwnerReachable(owner: owner, target: dependency.owner, site: site)) { continue }
+                        val subject = if ready.isSome() { give ready.unwrap().subject } else { give (try self.preparedProjectionSubject(id: id)).term }
+                        val count = dependencies.count()
+                        try self.appendAssociatedSelectionTermDependencies(terms: [subject], dependencies: inout dependencies)
+                        if dependencies.count() != count { changed = true }
+                        if normalizationCount != equations.count() {
+                            mut val available = [root]
+                            for equation in equations { available.append(equation) }
+                            normalization = <AssociatedMemberQueryWork context=available />
+                            normalizationCount = equations.count()
+                        }
+                        if try self.associatedSelectionReceiversEqual(subject: subject, receiver: dependency.receiver, site: site, work: inout normalization) { needed = true break }
                     }
                 }
                 if !needed { continue }
@@ -386,7 +437,7 @@ impl Comp {
                 val equation = <TraitBound subject=bound.subject constraint=bound.constraint offset=site />
                 if !included.contains(id) { equations.append(equation) included.insert(id) }
                 expanded.insert(id)
-                try self.appendAssociatedSelectionDependencies(root: equation, owners: inout dependencies, site: site)
+                try self.appendAssociatedSelectionDependencies(root: equation, dependencies: inout dependencies, site: site)
                 changed = true
             }
         }
