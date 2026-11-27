@@ -1,0 +1,27 @@
+// Independent source equations must be prepared before saving the decision.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/DuplicateRootScope.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("equation-scope admission rejected: "+diagnostic.message()) }
+    }
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
+    val function = compiler.arena.functionAt(index: index)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val saved = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+    match saved.outcome {
+        AssociatedMemberOutcome.Unique(candidate: val candidate) => {
+            if candidate.instance.positionalArgs.count() != 1U64 || saved.graph.equations.count() == 0U64 { panic("source equation did not justify instance deduplication") }
+        }
+        _ => { panic("source query was saved before required equations were ready") }
+    }
+    for name in ["strong", "strongFirst"] {
+    val strong = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    val declaration = compiler.arena.functionAt(index: strong)
+    val value = compiler.funcParamAt(params: declaration.params, index: 0U64)
+    val actual = compiler.lexicalBodyParameterType(function: strong, index: 0U64, ref: value.ty, receiver: 0U64).unwrap().unwrap()
+    val type = compiler.arena.typeAt(index: actual)
+    if type.assocNameId != 0U64 || type.nameId != compiler.internBytes(s: "I64").nameId { panic("normalized duplicate root lost the stronger output fact") }
+    }
+
+}

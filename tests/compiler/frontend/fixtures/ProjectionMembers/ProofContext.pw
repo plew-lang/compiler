@@ -1,0 +1,9 @@
+trait Key { type Item }
+trait Parent[A] { type Output }
+trait P[A] { type Out }
+trait Child[A]: Parent[A] + Parent[I64] + P[I64, Out=I64] {}
+trait Other[A]: Parent[A] {}
+fn entry[T](item: T#Child[T#Key.Item].Output) where T: Child[T#Key.Item] + Key[Item=I64] {}
+fn different[T](item: T#Child[T#Key.Item].Output) where T: Child[T#Key.Item] + Other[I64] + Key[Item=I64] {}
+fn chained[T](item: T#Child[T#P[T#Key.Item].Out].Output) where T: Child[T#P[T#Key.Item].Out] + Key[Item=I64] {}
+fn main() {}

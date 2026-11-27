@@ -1,0 +1,7 @@
+trait Key { type Item }
+trait Parent[A] { type Output }
+trait Child[A]: Parent[A] + Parent[I64] {}
+fn entry[T](item: T#Child[T#Key.Item].Output) where T: Child[T#Key.Item] + Child[I64] + Key[Item=I64] {}
+fn strong[T](item: T#Parent[T#Key.Item].Output) where T: Parent[I64] + Parent[T#Key.Item, Output=I64] + Key[Item=I64] {}
+fn strongFirst[T](item: T#Parent[T#Key.Item].Output) where T: Parent[T#Key.Item, Output=I64] + Parent[I64] + Key[Item=I64] {}
+fn main() {}

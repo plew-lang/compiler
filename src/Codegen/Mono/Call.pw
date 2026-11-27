@@ -538,7 +538,7 @@ pub impl Comp {
             ProvidedBodyEvidence.Direct(val proof) => { return <Result.Ok value=proof /> }
             ProvidedBodyEvidence.Paths(val owner, val proofs) => {
                 mut val selection = <TraitProofSelection />
-                for proof in proofs { try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: owner, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [], assumptions: assumptions) }
+                for proof in proofs { try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: owner, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [], assumptions: assumptions, normalizations: []) }
                 val result = try self.finishTraitProofSelection(selection: inout selection, traitOwner: owner, demand: <ConformanceProofDemand.MemberDispatch />)
                 return self.requireConformanceProof(answer: result)
             }

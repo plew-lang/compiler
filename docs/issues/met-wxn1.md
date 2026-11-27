@@ -77,6 +77,28 @@ Source-equation records additionally check exact source-clause mapping. Source
 re-reviews found no remaining defect in those slices; these are not final B gates.
 The distinct-receiver control checks its semantic query, not C's unfinished text.
 
+## Proof-comparison checkpoint
+
+Normalization context now reaches path comparison and equation agreement as a
+fallible input. Bounded composition replays saved equations around root-local
+normalization. Equivalent complete root premises can contribute compatible output
+facts after normalization; source root identities and distinct trait-subject
+branches remain retained. This does not admit Child from Parent alone.
+
+Native RED/GREEN evidence is indexed by meta
+`evidence/rejection-domains/diagnostic-domain-implementation/projection-members/proof-context-checkpoint.json`.
+It includes lost external equations, composed root/external equations, normalized
+duplicate roots and reversed stronger-output premise ordering. The initial
+weak-first stronger-output case already passed and is a control, not RED.
+The reversed order failed with the target panic before normalizing the premise
+bound and passes afterward. Independent neutral source review found no required correction in this prerequisite,
+including both-root output compatibility and preservation of trait-subject steps.
+Aggregate native suite-v7 passes all twelve profiles with unchanged inputs and
+zero compile/runtime/link/native status. Repeated comparison graph construction
+is a possible cost, not a demonstrated regression; formal performance is still
+required at the adoption gate. This prerequisite does not complete the occurrence
+receipt or admitted declaring-instance publication below.
+
 ## Next implementation sequence
 
 1. Preserve normalization context in conformance-path comparison:

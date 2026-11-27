@@ -179,7 +179,7 @@ pub impl Comp {
                 for proof in candidates {
                     val witness = self.proofWitnessForTrait(proof: proof, traitIdx: traitIndex)
                     if witness.conformIdx != site.selectedConformance || !self.selectedWitnessReceiverMatches(witness: witness, receiverRef: receiverRef) { continue }
-                    try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: conformance.traitStart, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [], assumptions: assumptions)
+                    try self.collectTraitProof(selection: inout selection, candidate: proof, traitOwner: conformance.traitStart, preferred: false, demand: <ConformanceProofDemand.MemberDispatch />, assocNames: [], assocValues: [], assumptions: assumptions, normalizations: [])
                 }
                 val answer = try self.finishTraitProofSelection(selection: inout selection, traitOwner: conformance.traitStart, demand: <ConformanceProofDemand.MemberDispatch />)
                 val proof = try self.requireConformanceProof(answer: answer)

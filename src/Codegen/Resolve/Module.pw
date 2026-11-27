@@ -1372,7 +1372,7 @@ impl Comp {
         val firstSource = try self.providedMemberSourceProof(function: left, proof: first)
         val secondSource = try self.providedMemberSourceProof(function: right, proof: second)
         if self.proofIsMissing(proof: firstSource) || self.proofIsMissing(proof: secondSource) { return <Result.Ok value=false /> }
-        return <Result.Ok value=self.sameSourceProofPath(a: firstSource, b: secondSource) />
+        return self.sameSourceProofPath(a: firstSource, b: secondSource)
     }
 
     inout fn memberCandidateAmbiguityKind(a: Callable, b: Callable) -> MemberCallAmbiguityKind {

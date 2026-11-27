@@ -1,0 +1,79 @@
+// Conformance path equivalence must retain the query equation context.
+fn projectionProofControl(compiler: inout Comp, name: String, equations: Bool, accepted: Bool) {
+    val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+    val function = compiler.arena.functionAt(index: index)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val occurrence = compiler.sourceTypeUses.useAt(index: parameter.authoredTypeUse-1U64).unwrap()
+    val saved = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+    val candidate = match saved.outcome { AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate _ => { panic("proof context namespace setup was not unique") } }
+    val admitted = compiler.authoredSignatureViews.get(key: index).unwrap()
+    val context = if equations { give admitted.recipeEquations.getOr(key: occurrence.recipe, fallback: []) } else { give [] }
+    if equations && context.count() == 0U64 { panic("proof context equation setup missing") }
+    val scope = compiler.declarationTypeScope(owner: index).unwrap()
+    val assumptions = compiler.declarationScopeAssumptions(scope: scope).unwrap()
+    val result = compiler.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: saved.graph.roots[0U64].subject, traitId: 0U64, traitOwner: candidate.instance.owner, traitArgs: <PatternTypeInput.Values values=candidate.instance.positionalArgs />, patternParams: <PatternBindInput.Values values=[] />, traitArgsOpen: !equations, assumptions: assumptions, normalizations: context).unwrap()
+    match result {
+        ConformanceProofResult.Found(proof: _) => { if !accepted { panic("different proof paths collapsed") } }
+        ConformanceProofResult.Ambiguous(owner: _, demand: _, selectedSource: _) => { if accepted { panic("known equation was discarded by conformance path comparison") } }
+        ConformanceProofResult.Missing => { panic("proof context lost a declared path") }
+    }
+}
+fn main() {
+    mut val compiler = <Comp />
+    analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ProofContext.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />).unwrap()
+    projectionProofControl(compiler: inout compiler, name: "entry", equations: false, accepted: false)
+    projectionProofControl(compiler: inout compiler, name: "different", equations: true, accepted: false)
+    projectionProofControl(compiler: inout compiler, name: "entry", equations: true, accepted: true)
+    val chained = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "chained").nameId)
+    val chainedFunction = compiler.arena.functionAt(index: chained)
+    val chainedParameter = compiler.funcParamAt(params: chainedFunction.params, index: 0U64)
+    val chainedUse = compiler.sourceTypeUses.useAt(index: chainedParameter.authoredTypeUse-1U64).unwrap()
+    val chainedTerm = compiler.arena.typeAt(index: chainedParameter.ty)
+    val chainedOwner = compiler.associatedProjectionTraitOwner(projection: chainedTerm)
+    val chainedEquations = compiler.authoredSignatureViews.get(key: chained).unwrap().recipeEquations.getOr(key: chainedUse.recipe, fallback: [])
+    mut val keyOnly: Array[ProjectionNormalizationStep] = []
+    for equation in chainedEquations {
+        if compiler.arena.typeAt(index: equation.source).assocTraitId == compiler.internBytes(s: "Key").nameId { keyOnly.append(equation) }
+    }
+    if keyOnly.count() == 0U64 { panic("chained equation context setup missing") }
+    mut val chainedRoot: Optional[TraitBound] = <Optional.None />
+    for row in 0U64..<compiler.decls.funcBounds.count() {
+        val bound = compiler.decls.funcBounds.at(index: row)
+        if bound.fnIdx == chained && bound.constraint.key.owner == chainedOwner { chainedRoot = <Optional.Some v=compiler.declarationBound(source: <DeclarationBoundRef.Function index=row />) /> break }
+    }
+    val chainedNamespace = compiler.retainedAssociatedSelection(occurrence: chainedParameter.authoredTypeUse, ref: chainedParameter.ty).unwrap().unwrap()
+    val chainedCandidate = match chainedNamespace.outcome { AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate _ => { panic("chained namespace setup missing") } }
+    val chainedInput = <TraitBound subject=chainedRoot.unwrap().subject constraint=<TraitConstraint key=<TraitInstanceKey owner=chainedCandidate.instance.owner positionalArgs=chainedTerm.assocTraitArgs /> positionalArgsOpen=false assocPredicates=[] /> offset=0U64 />
+    val chainedResult = compiler.proofComparisonBound(bound: chainedInput, context: chainedRoot.unwrap(), normalizations: keyOnly).unwrap()
+    if !compiler.sameAssociatedMemberInstance(first: chainedResult.constraint.key, second: chainedCandidate.instance) { panic("root equation was not revisited after external instance normalization") }
+    val entry = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "entry").nameId)
+    val function = compiler.arena.functionAt(index: entry)
+    val parameter = compiler.funcParamAt(params: function.params, index: 0U64)
+    val source = compiler.arena.typeAt(index: parameter.ty)
+    val child = compiler.associatedProjectionTraitOwner(projection: source)
+    mut val clause = compiler.decls.funcBounds.count()
+    for index in 0U64..<compiler.decls.funcBounds.count() {
+        val bound = compiler.decls.funcBounds.at(index: index)
+        if bound.fnIdx == entry && bound.constraint.key.owner == child { clause = index break }
+    }
+    if clause == compiler.decls.funcBounds.count() { panic("proof source clause setup missing") }
+    val owner = compiler.decls.traitIndexByOffset(offset: child)
+    val left = <StaticConformanceProof.AssumedSupertraitPath source=<DeclarationBoundRef.Function index=clause /> steps=[<SupertraitRef traitIndex=owner boundIndex=0U64 />] />
+    val right = <StaticConformanceProof.AssumedSupertraitPath source=<DeclarationBoundRef.Function index=clause /> steps=[<SupertraitRef traitIndex=owner boundIndex=1U64 />] />
+    val projected = source.assocTraitArgs[0U64]
+    val occurrence = compiler.sourceTypeUses.useAt(index: parameter.authoredTypeUse-1U64).unwrap()
+    val context = compiler.authoredSignatureViews.get(key: entry).unwrap().recipeEquations.getOr(key: occurrence.recipe, fallback: [])
+    val namespace = compiler.retainedAssociatedSelection(occurrence: parameter.authoredTypeUse, ref: parameter.ty).unwrap().unwrap()
+    val candidate = match namespace.outcome { AssociatedMemberOutcome.Unique(candidate: val candidate) => candidate _ => { panic("predicate agreement setup missing") } }
+    val output = compiler.internBytes(s: "Output").nameId
+    val receiver = namespace.graph.roots[0U64].subject
+    val predicateRoot = <TraitBound subject=receiver constraint=<TraitConstraint key=candidate.instance positionalArgsOpen=false assocPredicates=[<TraitAssocPredicate member=output value=projected span=0U64 />, <TraitAssocPredicate member=output value=candidate.instance.positionalArgs[0U64] span=0U64 />] /> offset=0U64 />
+    if compiler.inheritedInstanceEquationsAgree(root: predicateRoot, receiver: receiver, instance: candidate.instance, normalizations: []).unwrap() { panic("different associated equations were accepted without context") }
+    if !compiler.inheritedInstanceEquationsAgree(root: predicateRoot, receiver: receiver, instance: candidate.instance, normalizations: context).unwrap() { panic("associated equation agreement discarded the saved context") }
+    val cyclic = [<ProjectionNormalizationStep source=projected proof=0U64 output=projected />]
+    match compiler.sameSourceProofPath(a: left, b: right, normalizations: cyclic) {
+        Result.Ok(value: _) => { panic("proof replay failure became an equality or ambiguity result") }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != "selected condition projection evidence is cyclic" { panic("proof replay failure cause was replaced") } }
+    }
+
+}

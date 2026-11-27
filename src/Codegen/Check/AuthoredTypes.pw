@@ -2817,7 +2817,7 @@ impl Comp {
                 val proofSubject = if type.assocNameId == 0U64 { give self.authoredTraitViewSubject(ref: subject) } else { give subject }
                 mut val proof = try self.requireAuthoredViewProof(subject: proofSubject, instance: instance, assumptions: projectionAssumptions, offset: selector.writtenStart, selectedProjection: selectedProjection, normalizations: context)
                 if isProjection {
-                    proof = try self.selectSignatureProjectionEquation(proof: proof, subject: subject, owner: selector.traitInstance.owner, arguments: arguments, member: type.assocNameId, assumptions: projectionAssumptions, offset: occurrence.site)
+                    proof = try self.selectSignatureProjectionEquation(proof: proof, subject: subject, owner: selector.traitInstance.owner, arguments: arguments, member: type.assocNameId, assumptions: projectionAssumptions, offset: occurrence.site, normalizations: context)
                 }
                 try self.checkStaticProofEvidence(proof: proof, offset: occurrence.site, assumptions: assumptions)
                 try self.requireDeclarationProofSupport(dependencies: (try self.scopedProofDependencies(proof: proof, scope: scope, offset: occurrence.site, normalizations: context)), offset: occurrence.site)
@@ -2927,15 +2927,16 @@ impl Comp {
 
     // Equivalent declaration premises can contribute the equation for this
     // instance without allowing an unrelated conformance path to compete.
-    inout fn selectSignatureProjectionEquation(proof: StaticConformanceProof, subject: U64, owner: U64, arguments: Array[U64], member: U64, assumptions: Array[DeclarationBoundRef], offset: U64) -> Result[StaticConformanceProof, CompileDiagnostic] {
+    inout fn selectSignatureProjectionEquation(proof: StaticConformanceProof, subject: U64, owner: U64, arguments: Array[U64], member: U64, assumptions: Array[DeclarationBoundRef], offset: U64, normalizations: Array[ProjectionNormalizationStep]) -> Result[StaticConformanceProof, CompileDiagnostic] {
         val premise = self.signatureProjectionPremise(proof: proof)
         if premise.source.isNone() { return <Result.Ok value=proof /> }
         val root = premise.source.unwrap()
         mut val selected = <TraitProjectionEquality.Missing />
         mut val equationProof = proof
         for source in assumptions {
-            if !self.sameSourceProofRoot(a: root, b: source) { continue }
-            val bound = self.declarationBound(source: source)
+            if !(try self.sameSourceProofRoot(a: root, b: source, normalizations: normalizations)) { continue }
+            val original = self.declarationBound(source: source)
+            val bound = try self.proofComparisonBound(bound: original, context: original, normalizations: normalizations)
             val equation = self.traitProjectionEquality(bound: bound, receiver: subject, owner: owner, arguments: arguments, member: member, context: bound, projectionPath: [], retainPath: true)
             match equation {
                 TraitProjectionEquality.Value(term: _, steps: val steps) => {
@@ -2985,7 +2986,7 @@ impl Comp {
         val answer = try self.queryTraitPatternProof(demand: <ConformanceProofDemand.SourceAdmission />, baseRef: receiver, traitId: 0U64, traitOwner: owner, traitArgs: <PatternTypeInput.Values values=args />, patternParams: <PatternBindInput.Values values=[] />, assumptions: assumptions, normalizations: equations)
         match answer {
             ConformanceProofResult.Found(proof: val selected) => {
-                val proof = try self.selectSignatureProjectionEquation(proof: selected, subject: receiver, owner: owner, arguments: args, member: projection.assocNameId, assumptions: assumptions, offset: offset)
+                val proof = try self.selectSignatureProjectionEquation(proof: selected, subject: receiver, owner: owner, arguments: args, member: projection.assocNameId, assumptions: assumptions, offset: offset, normalizations: equations)
                 val output = try self.associatedOutputTermInProof(proof: proof, traitOwner: owner, assocId: projection.assocNameId)
                 if output == 0U64 || self.typeRefEq(a: output, b: rebuilt) { return <Result.Ok value=rebuilt /> }
                 mut val next = active

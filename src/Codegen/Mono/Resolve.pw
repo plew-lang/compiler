@@ -769,10 +769,10 @@ pub impl Comp {
                             if !self.proofIsMissing(proof: completed) {
                                 if enumerateInstances { candidates.append(completed) }
                                 if !enumerateInstances && !demand.isExistence() && !traitArgsOpen && self.typeRefEq(a: bound.subject, b: baseRef) {
-                                    try self.collectTraitProof(selection: inout direct, candidate: completed, traitOwner: traitOwner, preferred: false, preferredOwners: [], demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions)
+                                    try self.collectTraitProof(selection: inout direct, candidate: completed, traitOwner: traitOwner, preferred: false, preferredOwners: [], demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, normalizations: normalizations)
                                 }
                                 if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions, sourceOwners: sourceOwners)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
-                                if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: start, sourceOwners: preferredOwners), preferredOwners: preferredOwners, demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
+                                if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: start, sourceOwners: preferredOwners), preferredOwners: preferredOwners, demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, normalizations: normalizations) }
                             }
                         }
                         if !self.traitProofStateSeen(states: seen, candidate: start) { seen.append(start) pending.append(start) }
@@ -802,7 +802,7 @@ pub impl Comp {
                         if !self.proofIsMissing(proof: completed) {
                             if enumerateInstances { candidates.append(completed) }
                             if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions, sourceOwners: sourceOwners)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
-                            if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: start, sourceOwners: preferredOwners), preferredOwners: preferredOwners, demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
+                            if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: start, sourceOwners: preferredOwners), preferredOwners: preferredOwners, demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, normalizations: normalizations) }
                         }
                     }
                     if !(self.traitProofStateSeen(states: seen, candidate: start)) {
@@ -844,7 +844,7 @@ pub impl Comp {
                                         if !self.proofIsMissing(proof: completed) {
                                             if enumerateInstances { candidates.append(completed) }
                                             if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions, sourceOwners: sourceOwners)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
-                                            if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: next, sourceOwners: preferredOwners), preferredOwners: preferredOwners, demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
+                                            if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: next, sourceOwners: preferredOwners), preferredOwners: preferredOwners, demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, normalizations: normalizations) }
                                         }
                                     }
                                 }
@@ -881,7 +881,7 @@ pub impl Comp {
                             if !self.proofIsMissing(proof: completed) {
                                 if enumerateInstances { candidates.append(completed) }
                                 if !enumerateInstances && demand.isExistence() && (try self.selectedProofAssociatedTypesMatch(proof: completed, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions, sourceOwners: sourceOwners)) { return <Result.Ok value=<ConformanceProofResult.Found proof=completed /> /> }
-                                if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: next, sourceOwners: preferredOwners), preferredOwners: preferredOwners, demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions) }
+                                if !enumerateInstances && !demand.isExistence() { try self.collectTraitProof(selection: inout selection, candidate: completed, traitOwner: traitOwner, preferred: preferredOwners.count() != 0U64 && self.traitProofStateMatchesSources(state: next, sourceOwners: preferredOwners), preferredOwners: preferredOwners, demand: demand, assocNames: assocNames, assocValues: assocValues, assumptions: assumptions, normalizations: normalizations) }
                             }
                         }
                         if !(self.traitProofStateSeen(states: seen, candidate: next)) {
@@ -902,32 +902,48 @@ pub impl Comp {
 impl Comp {
     // Only this query-local equivalence deduplicates exact duplicate promises.
     // Ordinary proof identity/equality retains its declaration-root identity.
-    inout fn sameSourceProofRoot(a: DeclarationBoundRef, b: DeclarationBoundRef) -> Bool {
-        if !self.declarationBoundIsValid(source: a) || !self.declarationBoundIsValid(source: b) { return false }
-        if self.sameDeclarationBound(a: a, b: b) { return true }
-        val left = self.declarationBound(source: a)
-        val right = self.declarationBound(source: b)
-        return self.typeRefEq(a: left.subject, b: right.subject) && left.constraint.key.owner == right.constraint.key.owner && self.sameResolvedTypeRefs(a: left.constraint.key.positionalArgs, b: right.constraint.key.positionalArgs)
+    inout fn sameSourceProofRoot(a: DeclarationBoundRef, b: DeclarationBoundRef, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[Bool, CompileDiagnostic] {
+        if !self.declarationBoundIsValid(source: a) || !self.declarationBoundIsValid(source: b) { return <Result.Ok value=false /> }
+        if self.sameDeclarationBound(a: a, b: b) { return <Result.Ok value=true /> }
+        val originalLeft = self.declarationBound(source: a)
+        val originalRight = self.declarationBound(source: b)
+        if originalLeft.constraint.key.owner != originalRight.constraint.key.owner { return <Result.Ok value=false /> }
+        val left = try self.proofComparisonBound(bound: originalLeft, context: originalLeft, normalizations: normalizations)
+        val right = try self.proofComparisonBound(bound: originalRight, context: originalRight, normalizations: normalizations)
+        if !self.typeRefEq(a: left.subject, b: right.subject) || !self.sameAssociatedMemberInstance(first: left.constraint.key, second: right.constraint.key) { return <Result.Ok value=false /> }
+        // Output predicates do not select an instance. Once the roots coincide,
+        // retain both promises and reject incompatible facts instead of picking one.
+        mut val predicates = left.constraint.assocPredicates
+        for predicate in right.constraint.assocPredicates { predicates.append(predicate) }
+        mut val outputs: Dictionary[U64, U64] = [:]
+        for predicate in predicates {
+            match outputs.get(key: predicate.member) {
+                Optional.Some(v: val previous) => { if !self.typeRefEq(a: previous, b: predicate.value) { return <Result.Ok value=false /> } }
+                Optional.None => { outputs[predicate.member] = predicate.value }
+            }
+        }
+        return <Result.Ok value=true />
     }
 
-    inout fn sameSourceProofPath(a: StaticConformanceProof, b: StaticConformanceProof) -> Bool {
-        if self.sameStaticConformanceProof(a: a, b: b) { return true }
+    inout fn sameSourceProofPath(a: StaticConformanceProof, b: StaticConformanceProof, normalizations: Array[ProjectionNormalizationStep] = []) -> Result[Bool, CompileDiagnostic] {
+        if self.sameStaticConformanceProof(a: a, b: b) { return <Result.Ok value=true /> }
         match a {
             StaticConformanceProof.AssumedBound(source: val left) => {
-                match b { StaticConformanceProof.AssumedBound(source: val right) => { return self.sameSourceProofRoot(a: left, b: right) } _ => {} }
+                match b { StaticConformanceProof.AssumedBound(source: val right) => { return self.sameSourceProofRoot(a: left, b: right, normalizations: normalizations) } _ => {} }
             }
             StaticConformanceProof.AssumedSupertraitPath(source: val left, steps: val leftSteps) => {
                 match b {
                     StaticConformanceProof.AssumedSupertraitPath(source: val right, steps: val rightSteps) => {
-                        if self.sameSupertraitSteps(a: leftSteps, b: rightSteps) { return self.sameSourceProofRoot(a: left, b: right) }
+                        if self.sameSupertraitSteps(a: leftSteps, b: rightSteps) { return self.sameSourceProofRoot(a: left, b: right, normalizations: normalizations) }
                         // A declared supertrait constrains the same subject.
                         // From one premise, distinct declared paths to the
                         // same instance add facts to that instance.
-                        if !self.sameDeclarationBound(a: left, b: right) { return false }
-                        val first = self.assumedSupertraitBound(source: left, steps: leftSteps)
-                        val second = self.assumedSupertraitBound(source: right, steps: rightSteps)
-                        if first.subject == 0U64 || second.subject == 0U64 || first.constraint.key.owner != second.constraint.key.owner || !self.sameResolvedTypeRefs(a: first.constraint.key.positionalArgs, b: second.constraint.key.positionalArgs) { return false }
-                        return self.inheritedInstanceEquationsAgree(root: self.declarationBound(source: left), instance: first)
+                        if !(try self.sameSourceProofRoot(a: left, b: right, normalizations: normalizations)) { return <Result.Ok value=false /> }
+                        val first = try self.proofComparisonBound(bound: self.assumedSupertraitBound(source: left, steps: leftSteps), context: self.declarationBound(source: left), normalizations: normalizations)
+                        val second = try self.proofComparisonBound(bound: self.assumedSupertraitBound(source: right, steps: rightSteps), context: self.declarationBound(source: left), normalizations: normalizations)
+                        if first.subject == 0U64 || second.subject == 0U64 || first.constraint.key.owner != second.constraint.key.owner || !self.sameResolvedTypeRefs(a: first.constraint.key.positionalArgs, b: second.constraint.key.positionalArgs) { return <Result.Ok value=false /> }
+                        if !(try self.inheritedInstanceEquationsAgree(root: self.declarationBound(source: left), receiver: first.subject, instance: first.constraint.key, normalizations: normalizations)) { return <Result.Ok value=false /> }
+                        return self.inheritedInstanceEquationsAgree(root: self.declarationBound(source: right), receiver: second.subject, instance: second.constraint.key, normalizations: normalizations)
                     }
                     _ => {}
                 }
@@ -935,58 +951,85 @@ impl Comp {
             StaticConformanceProof.AssumedTraitPath(source: val left, steps: val leftSteps, edges: val leftEdges) => {
                 match b {
                     StaticConformanceProof.AssumedTraitPath(source: val right, steps: val rightSteps, edges: val rightEdges) => {
-                        if !self.sameSourceProofRoot(a: left, b: right) || !self.sameSupertraitSteps(a: leftSteps, b: rightSteps) || leftEdges.count() != rightEdges.count() { return false }
+                        if !(try self.sameSourceProofRoot(a: left, b: right, normalizations: normalizations)) || !self.sameSupertraitSteps(a: leftSteps, b: rightSteps) || leftEdges.count() != rightEdges.count() { return <Result.Ok value=false /> }
                         mut val index = 0U64
                         while index < leftEdges.count() {
-                            if !self.sameWitnessMatch(a: leftEdges[index], b: rightEdges[index]) { return false }
+                            if !self.sameWitnessMatch(a: leftEdges[index], b: rightEdges[index]) { return <Result.Ok value=false /> }
                             index += 1U64
                         }
-                        return true
+                        return <Result.Ok value=true />
                     }
                     _ => {}
                 }
             }
             _ => {}
         }
-        return false
+        return <Result.Ok value=false />
     }
 
-    inout fn inheritedInstanceEquationsAgree(root: TraitBound, instance: TraitBound) -> Bool {
-        val key = instance.constraint.key
-        val index = self.decls.traitIndexByOffset(offset: key.owner)
-        if index >= self.decls.traitCount() { return false }
-        val members = self.decls.traitAt(index: index).assocTypes
-        for member in 0U64..<members.count() {
-            val declaration = self.traitBindAt(binds: members, index: member)
-            match self.traitProjectionEquality(bound: root, receiver: instance.subject, owner: key.owner, arguments: key.positionalArgs, member: declaration.nameId, context: root, projectionPath: []) {
-                TraitProjectionEquality.Conflict => { return false }
-                TraitProjectionEquality.Missing | TraitProjectionEquality.Value => {}
+    // Structural proof comparison preserves its source root. Bound equations
+    // are folded in that root; independent admitted equations are only replayed.
+    inout fn normalizeProofComparisonTerm(ref: U64, context: TraitBound, normalizations: Array[ProjectionNormalizationStep], site: U64) -> Result[U64, CompileDiagnostic] {
+        mut val current = ref
+        for iteration in 0U64..<128U64 {
+            // An external equation may first make a root-local instance match;
+            // a root-local output may in turn expose another saved equation.
+            val prepared = try self.replayProjectionNormalizations(ref: current, normalizations: normalizations, offset: site)
+            val local = self.normalizeBoundProjectionTerm(ref: prepared, context: context, projectionPath: [])
+            val next = try self.replayProjectionNormalizations(ref: local, normalizations: normalizations, offset: site)
+            if self.typeRefEq(a: next, b: current, sourceTerms: true) { return <Result.Ok value=next /> }
+            current = next
+        }
+        return <Result.Err error=self.diagnosticAt(offset: site, msg: "conformance proof normalization analysis limit exceeded", failureDomain: <FailureDomain.Limit />) />
+    }
+    inout fn proofComparisonBound(bound: TraitBound, context: TraitBound, normalizations: Array[ProjectionNormalizationStep]) -> Result[TraitBound, CompileDiagnostic] {
+        val subject = try self.normalizeProofComparisonTerm(ref: bound.subject, context: context, normalizations: normalizations, site: bound.offset)
+        mut val arguments: Array[U64] = []
+        for argument in bound.constraint.key.positionalArgs { arguments.append(try self.normalizeProofComparisonTerm(ref: argument, context: context, normalizations: normalizations, site: bound.offset)) }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        for predicate in bound.constraint.assocPredicates { predicates.append(<TraitAssocPredicate member=predicate.member value=(try self.normalizeProofComparisonTerm(ref: predicate.value, context: context, normalizations: normalizations, site: bound.offset)) span=predicate.span />) }
+        return <Result.Ok value=<TraitBound subject=subject constraint=<TraitConstraint key=<TraitInstanceKey owner=bound.constraint.key.owner positionalArgs=arguments /> positionalArgsOpen=bound.constraint.positionalArgsOpen assocPredicates=predicates /> offset=bound.offset /> />
+    }
+    inout fn inheritedInstanceEquationsAgree(root: TraitBound, receiver: U64, instance: TraitInstanceKey, normalizations: Array[ProjectionNormalizationStep]) -> Result[Bool, CompileDiagnostic] {
+        // Visit the explicit constraint graph once, rather than resolving every
+        // declared associated name again along every inheritance path.
+        mut val work = <AssociatedMemberQueryWork context=[root] />
+        val graph = try self.associatedMemberEquationGraph(context: 0U64, site: root.offset, work: inout work)
+        mut val values: Dictionary[U64, U64] = [:]
+        for written in work.graphs[graph].nodes {
+            val bound = try self.proofComparisonBound(bound: written, context: root, normalizations: normalizations)
+            if !self.typeRefEq(a: bound.subject, b: receiver) || !self.sameAssociatedMemberInstance(first: bound.constraint.key, second: instance) { continue }
+            for predicate in bound.constraint.assocPredicates {
+                match values.get(key: predicate.member) {
+                    Optional.Some(v: val previous) => { if !self.typeRefEq(a: previous, b: predicate.value) { return <Result.Ok value=false /> } }
+                    Optional.None => { values[predicate.member] = predicate.value }
+                }
             }
         }
-        return true
+        return <Result.Ok value=true />
     }
 
-    inout fn collectTraitProof(selection: inout TraitProofSelection, candidate: StaticConformanceProof, traitOwner: U64, preferred: Bool, preferredOwners: Array[U64] = [], demand: ConformanceProofDemand, assocNames: Array[U64], assocValues: Array[U64], assumptions: Array[DeclarationBoundRef]) -> Result[(), CompileDiagnostic] {
+    inout fn collectTraitProof(selection: inout TraitProofSelection, candidate: StaticConformanceProof, traitOwner: U64, preferred: Bool, preferredOwners: Array[U64] = [], demand: ConformanceProofDemand, assocNames: Array[U64], assocValues: Array[U64], assumptions: Array[DeclarationBoundRef], normalizations: Array[ProjectionNormalizationStep]) -> Result[(), CompileDiagnostic] {
         val compatible = try self.selectedProofAssociatedTypesMatch(proof: candidate, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions)
         val preferredCompatible = preferred && compatible && (assocNames.count() == 0U64 || (try self.selectedProofAssociatedTypesMatch(proof: candidate, traitOwner: traitOwner, names: assocNames, values: assocValues, assumptions: assumptions, sourceOwners: preferredOwners)))
         match demand {
             ConformanceProofDemand.SourceAdmission => {
                 if self.proofIsMissing(proof: selection.selected) { selection.selected = candidate }
-                else if !self.sameSourceProofPath(a: selection.selected, b: candidate) { selection.ambiguous = true }
+                else if !(try self.sameSourceProofPath(a: selection.selected, b: candidate, normalizations: normalizations)) { selection.ambiguous = true }
                 if compatible { selection.compatible = candidate }
                 if preferred {
                     if self.proofIsMissing(proof: selection.preferred) { selection.preferred = candidate }
-                    else if !self.sameSourceProofPath(a: selection.preferred, b: candidate) { selection.preferredAmbiguous = true }
+                    else if !(try self.sameSourceProofPath(a: selection.preferred, b: candidate, normalizations: normalizations)) { selection.preferredAmbiguous = true }
                     if preferredCompatible { selection.preferredCompatible = candidate }
                 }
             }
             ConformanceProofDemand.MemberDispatch => {
                 if self.proofIsMissing(proof: selection.selected) { selection.selected = candidate }
-                else if !self.sameMemberProofEndpoint(selected: selection.selected, candidate: candidate, traitOwner: traitOwner) { selection.ambiguous = true }
+                else if !(try self.sameMemberProofEndpoint(selected: selection.selected, candidate: candidate, traitOwner: traitOwner, normalizations: normalizations)) { selection.ambiguous = true }
                 if compatible { selection.compatible = candidate }
                 if preferred {
                     if self.proofIsMissing(proof: selection.preferred) { selection.preferred = candidate }
-                    else if !self.sameMemberProofEndpoint(selected: selection.preferred, candidate: candidate, traitOwner: traitOwner) { selection.preferredAmbiguous = true }
+                    else if !(try self.sameMemberProofEndpoint(selected: selection.preferred, candidate: candidate, traitOwner: traitOwner, normalizations: normalizations)) { selection.preferredAmbiguous = true }
                     if preferredCompatible { selection.preferredCompatible = candidate }
                 }
             }
@@ -1015,12 +1058,12 @@ pub impl Comp {
     // member selection must instead distinguish different terminal witnesses.
     // Paths to the same witness share a body; its own calls select their own
     // witnesses in the declaration environment, not in the caller's path.
-    inout fn sameMemberProofEndpoint(selected: StaticConformanceProof, candidate: StaticConformanceProof, traitOwner: U64) -> Bool {
+    inout fn sameMemberProofEndpoint(selected: StaticConformanceProof, candidate: StaticConformanceProof, traitOwner: U64, normalizations: Array[ProjectionNormalizationStep]) -> Result[Bool, CompileDiagnostic] {
         val traitIndex = self.decls.traitIndexByOffset(offset: traitOwner)
         val prior = self.proofWitnessForTrait(proof: selected, traitIdx: traitIndex)
         val next = self.proofWitnessForTrait(proof: candidate, traitIdx: traitIndex)
-        if prior.conformIdx != 0U64 && next.conformIdx != 0U64 && self.sameWitnessMatch(a: prior, b: next) { return true }
-        return self.sameSourceProofPath(a: selected, b: candidate)
+        if prior.conformIdx != 0U64 && next.conformIdx != 0U64 && self.sameWitnessMatch(a: prior, b: next) { return <Result.Ok value=true /> }
+        return self.sameSourceProofPath(a: selected, b: candidate, normalizations: normalizations)
     }
 
     // Resolve an exact concrete trait instance through the same proof query
