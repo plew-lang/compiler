@@ -35,8 +35,9 @@ or a different parent's part too. [Executed evidence](../../../evidence/rejectio
   module conflict/cycle without order-dependent acceptance. Preserve required
   source ranges, std roots, package contexts, declaration publication and
   gen-mode entry-output suppression; no resolver/DAG-wide redesign.
-- Resolve same-parent repeated part policy first in met-7ust. Do not silently
-  promote the existing same-parent diagnostic as Source without specification.
+- Apply met-7ust: reject every second part request, including same-parent
+  explicit duplicates and explicit+auto. Aggregate annotations into one auto
+  request per source file before the common admission; keep explanatory origins.
 - Establish meaningful fixed-candidate native/CLI RED from minimal single-cause
   inputs. Cover both orders, legal shared use, same/different-parent part,
   same/different module, explicit/auto interactions and original source edges.
@@ -61,6 +62,5 @@ input/phantom-dependency errors are not included. Parent/phase3/main stay open.
 ## Independent scope advice
 
 qualified_member_plan confirms a discovery acceptance defect, not transport
-alone; role/edge ownership is the natural finite repair. It confirms that
-same-parent repeat acceptance cannot be inferred from forest alone. User
-judgment is pending in the prerequisite. No product repair is claimed.
+alone; role/edge ownership is the natural finite repair. The user has selected duplicate rejection in met-7ust; contracts now distinguish
+annotation aggregation from membership admission. No product repair is claimed.

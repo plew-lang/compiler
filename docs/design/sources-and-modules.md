@@ -92,6 +92,25 @@ Two graphs must not be conflated:
 - `part` edges form a forest: a file has at most one part parent and cannot participate in a part cycle. All descendants belong to the root's module.
 - `use` edges connect modules and must form a DAG, including re-publication edges. A part file cannot also be admitted as an independent use target.
 
+One discovery admission authority registers resolved file identity, module,
+Root/Part role, parent and introducing source edge. Every written part directive
+produces one request. Macro annotations are collected per source file and produce
+one generated-sibling part request if any annotation is present; collecting that
+single request is distinct from deduplicating membership requests. Explicit and
+automatic requests use the same admission operation. A second part request for
+an already admitted target is rejected, including the same parent and an
+explicit/automatic pair. Legal repeated use of a module root may reuse it;
+it cannot reuse a Part entry as a Root. Registration order must not excuse a
+role or parent conflict.
+
+Admission failures retain both request origins so presentation can explain a
+written duplicate or an automatic inclusion and point to the responsible source
+directive/annotation. Diagnostics render this shared decision; they do not own
+separate written and automatic duplicate rules. The first relevant annotation
+may anchor the file's single automatic request. Aggregating annotations avoids
+false duplicates from using multiple macros; exempting generated requests at
+registration would instead violate ordinary part membership.
+
 The loader must preserve enough edge provenance to diagnose a cycle or conflicting parent with the responsible directives. File deduplication cannot silently resolve conflicting membership by accepting whichever traversal reached the file first. A visited file and a completely discovered module are different states.
 
 Within a module, definitions and the root's external use bindings are shared across the root and every transitive part. Only a module's root may contain top-level `use` or `pub use`; this is each module root, not only the package entry `src/_.pw`. Part contents are restricted to impl blocks, nested part directives and macro directives. Use/re-publication, free functions, types, extern declarations and top-level values are rejected in every part, including generated parts. Membership does not excuse these restrictions.

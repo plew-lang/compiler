@@ -13,30 +13,25 @@ parent: met-iv6d
 # Define repeated part admission from the same parent
 
 
-## Decision required
+## Adopted decision and completion boundary
 
-Spec15/design define at most one parent, not whether the same parent may name
-the same part twice. Spec16 defines auto-part membership, not repeated-edge
-handling. Current explicit+explicit rejects while explicit+auto dedups; both
-paths must be represented in the common discovery admission repair met-iv6d.
+The user selected rejection of every second part request, including same-parent
+written duplicates and explicit+automatic inclusion. All requests share one
+membership admission authority. Multiple macro annotations first aggregate to
+one implicit sibling request per source file; they do not produce duplicate
+membership requests. Retain source-edge origin for explanatory diagnostics.
 
-Choose whether same-parent repeats are uniformly deduplicated, uniformly
-rejected, or explicitly distinct by written/automatic origin. Recommended:
-deduplicate the same parent/target once for explicit and automatic introduction,
-while different parents and Root/Part conflicts always reject. This follows
-one logical edge/one parent and avoids a macro-specific acceptance exception.
-Tradeoff: repeated written part no longer diagnoses a redundant directive.
-Reject-all would make explicit+auto inclusion fail where it currently succeeds.
+Normative contracts: spec15 part restrictions, spec16 automatic inclusion,
+and design sources-and-modules§4. No dedup exemption for generated requests.
+The reason is one source of membership acceptance and refusal, with annotation
+collection separate from edge registration. Product repair remains met-iv6d.
 
-Independent qualified_member_plan confirms no existing normative decision
-and that diagnostic wording is not a specification.
-[Executed minimal cases](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/README.md).
+Independent qualified_member_plan accepts spec/design/task alignment, with no
+confirmed must-fix. The [scoped source inventory](../../../evidence/rejection-domains/diagnostic-domain-implementation/part-membership-discovery/usage.json)
+finds no repeated written target or explicit generated target in compiler/src,
+compiler/std or syntax/src; no migration of those product files is indicated.
+This lexical survey is not a parser or an audit of arbitrary external sources.
+Intentional contrary cases stay as met-iv6d RED/GREEN controls.
 
-## Scope and completion
-
-Obtain user decision, update spec15/spec16 and matching sources-and-modules
-contract as needed, check existing same-parent explicit/auto usage and identify
-required migrations, add the chosen scenarios to met-iv6d, obtain independent
-review and save/push the decision. Do not implement graph machinery here or
-weaken tests. Until decided, no new Source authority for same-parent repeats.
-This task is open awaiting language judgment; product is unchanged.
+The documentation guarantee is complete after signed publication; met-iv6d
+owns product implementation, regression and performance gates.
