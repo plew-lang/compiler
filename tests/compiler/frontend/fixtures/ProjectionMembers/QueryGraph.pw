@@ -15,5 +15,7 @@ trait EqChild[A]: EqParent[A] + EqParent[I64] {}
 trait Key { type Item }
 trait ValueParent[A] { type Value }
 trait EqCarrier: Key + ValueParent[Self#Key.Item, Value=I64] {}
+fn firstBinder[T](value: T) {}
+fn secondBinder[T](value: T) {}
 fn subject(value: I64) {}
 fn main() {}

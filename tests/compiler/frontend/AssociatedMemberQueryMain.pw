@@ -66,6 +66,26 @@ fn main() {
     mut val incoming = 0U64
     for edge in result.graph.edges { if edge.target == selected.nodes[0U64] { incoming += 1U64 } }
     if incoming != 2U64 { panic("candidate dedup erased derivation edges") }
+    val repeatedRoots = compiler.queryAssociatedMember(subject: integer, roots: [diamond, root], equationContext: [], member: output, site: 0U64).unwrap()
+    queryUnique(result: repeatedRoots)
+    if repeatedRoots.graph.rootNodes.count() != 2U64 { panic("multiple roots lost their identities") }
+    val firstRoot = queryBound(compiler: inout compiler, name: "First", subject: integer, arguments: [])
+    val secondRoot = queryBound(compiler: inout compiler, name: "Second", subject: integer, arguments: [])
+    match compiler.queryAssociatedMember(subject: integer, roots: [firstRoot, secondRoot], equationContext: [], member: output, site: 0U64).unwrap().outcome {
+        AssociatedMemberOutcome.Ambiguous(candidates: val candidates) => { if candidates.count() != 2U64 { panic("distinct root declarations collapsed") } }
+        _ => { panic("multiple distinct roots were selected") }
+    }
+    mut val binderRoots: Array[TraitBound] = []
+    for name in ["firstBinder", "secondBinder"] {
+        val index = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: name).nameId)
+        val binderFunction = compiler.arena.functionAt(index: index)
+        val binder = compiler.funcParamAt(params: binderFunction.params, index: 0U64).ty
+        binderRoots.append(queryBound(compiler: inout compiler, name: "ParamRoot", subject: integer, arguments: [binder, integer]))
+    }
+    match compiler.queryAssociatedMember(subject: integer, roots: binderRoots, equationContext: [], member: output, site: 0U64).unwrap().outcome {
+        AssociatedMemberOutcome.Ambiguous(candidates: val candidates) => { if candidates.count() != 2U64 { panic("same-spelled binders collapsed") } }
+        _ => { panic("binder identity was replaced by its spelling") }
+    }
     val parameterized = queryBound(compiler: inout compiler, name: "ParamChild", subject: integer, arguments: [integer])
     val changed = queryUnique(result: compiler.queryAssociatedMember(subject: integer, roots: [parameterized], equationContext: [], member: output, site: 0U64).unwrap())
     if changed.instance.positionalArgs.count() != 2U64 || !compiler.typeRefEq(a: changed.instance.positionalArgs[0U64], b: integer, sourceTerms: true) || compiler.typeTermRefChildCount(ref: changed.instance.positionalArgs[1U64]) != 1U64 || !compiler.typeRefEq(a: compiler.typeTermRefChildRef(ref: changed.instance.positionalArgs[1U64], index: 0U64), b: integer, sourceTerms: true) { panic("parent argument substitution or arity lost") }

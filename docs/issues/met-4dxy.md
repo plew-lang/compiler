@@ -57,3 +57,23 @@ operand as no edge. availableTraitBoundShape alone is not a readiness proof;
 check supertraitOperandAvailable and actual reached storage before expansion.
 Canonical input preconditions remain explicit: this is not a complete validator
 for every arbitrary corrupted Comp/arena, whose separate owner is met-wuzv.
+
+
+## Current verification boundary
+
+Implementation checkpoint `7f77084f` connects the public Raw type/ref adapters to
+one query. `associated-member-query-native-v4.json` and `-v5.json` in meta's
+projection-members evidence record compile/runtime/link/native success, empty
+output and unchanged inputs. V5 adds independent equations needed within an
+inherited edge argument and the same query with only the real lexical header
+available (a snapshot-only Ir test adapter hides the completed trait index).
+The root-only equation control, diamond incoming edges, changed parent arity,
+Missing/Ambiguous Raw domains, malformed IDs/ranges and incomplete inputs are
+also exercised. V2/v3 failed because a new readiness test did not actually hide
+a completed header; they are setup failures, not product RED or GREEN.
+
+Independent source re-review found no further confirmed contract violation;
+this is not final certification. Remaining finite service gates include distinct
+same-spelled binder/module identities, multiple search roots and bounded growth.
+Source publication/final consumption and owned rejection remain the dependent
+children, not guarantees established by these native results.
