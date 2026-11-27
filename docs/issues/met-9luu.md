@@ -137,3 +137,13 @@ plus forged/session/failed-builder proof checks. Latest session-green-v2 also
 checks Raw diagnostic drain. Neutral source review of97143377 found no further
 Diag-case, payload/proof/root or note-retention must-fix. Fresh v3,96 owner
 matrix and normal capture/ownership regressions remain pending; not closed.
+
+## Final-candidate focused gates
+
+Frozen build v3 (20261127T102918-build-15aced) passed on adopted da2 carrier.
+Its complete .pw source set equals current product97143377/testsec680ec1;
+aggregate/file-manifest proof is closure-source.json. On that fresh compiler,
+closure96/96, declaration114/114 and8 existing capture/context/generic/unique
+fixtures on old+fresh (16 executions) pass with unchanged inputs. Receipts are
+closure-{green,declaration-regression,regressions}.json. Selected gen and final
+neutral certification remain pending. Parent retains whole/fixed-point/perf.
