@@ -113,3 +113,11 @@ aggregate formal/whole comparison. The adopted149aac baseline remains7.380636s
 and3314/248fail, not green. Missing/Ambiguous owned refusal/cache/lifetime is
 met-2yhf, not silently implemented or certified here. No all-source/global or
 stage3 completion is implied by the finite native suite.
+
+
+The independent document review confirms that this publication boundary preserves
+symbolic Parent publication, original Child proof, all final-consumer scenarios
+and performance/integration gates. The ten-profile snapshot and admitted-reader
+RED were also checked: all native controls pass; the latter fails only at the
+intended post-admission Parent assertion. This certifies the contract/evidence
+boundary, not implementation completion.
