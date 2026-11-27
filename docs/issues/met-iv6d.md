@@ -1,6 +1,6 @@
 ---
 id: met-iv6d
-status: in_progress
+status: closed
 deps: [met-7ust]
 links: []
 created: 2026-11-26T04:29:30Z
