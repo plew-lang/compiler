@@ -102,3 +102,19 @@ intact at this checkpoint; no Parent publication/final-consumer claim is made.
 Missing/Ambiguous owned refusal and remaining legacy selection paths are also
 unfinished. Continue with separate original-root proof and declaring-instance
 recipe/publication; do not merely rewrite the canonical owner and drop Child.
+
+
+Checkpoint API review confirms the occurrence/token mechanism is suitable and
+not conformance authority, but identifies unfinished B guarantees that must be
+resolved before canonical publication:
+- Current capture takes only Ready equations. Determine required equation
+  dependencies and prepare/propagate their Unlowered/Lowering/Failed state;
+  do not silently save an answer from incomplete relevant context, and do not
+  eagerly lower every unrelated bound.
+- Bare lexical-associated early returns in both adapters bypass final capture;
+  connect those as well as the already-covered nested receiver creation.
+- Separate authored-root identity from resolved-term identity in the retained
+  record. Current same-root/term check is valid only before Parent publication.
+  Keep authored and derived argument recipe lists distinct when arity changes.
+Native v8 repeats the A query/Raw graph controls successfully with this new
+Source capture active. This does not certify the outstanding B gaps above.
