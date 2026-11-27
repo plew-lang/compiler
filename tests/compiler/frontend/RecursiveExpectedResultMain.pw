@@ -1,0 +1,11 @@
+// Source-only: unbounded runtime specialization is not part of this inference probe.
+use ./Diag only { emitDiagnostic }
+fn main() {
+    for path in ["tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableRecursiveExpectedResultControl.pw", "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableRecursiveExpectedResult.pw"] {
+    match CheckedProgram.check(input: <FrontendInput.File path=path />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        ProgramCheckResult.Success(program: _) => {}
+        ProgramCheckResult.Failure(diagnostic: val diagnostic) => { emitDiagnostic(diagnostic: diagnostic)
+            panic(path+": recursive expected-result inference rejected: "+diagnostic.message()) }
+    }
+    }
+}

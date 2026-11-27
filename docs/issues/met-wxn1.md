@@ -357,3 +357,28 @@ aggregate formal/whole comparison. The adopted149aac baseline remains7.380636s
 and3314/248fail, not green. Missing/Ambiguous owned refusal/cache/lifetime is
 met-2yhf, not silently implemented or certified here. No all-source/global or
 stage3 completion is implied by the finite native suite.
+
+## Expected-result inference checkpoint
+
+WIP 225a713c reads the admitted Direct result, substitutes known arguments and
+publishes the declaration reader's result/occurrence rather than the expectation.
+Fixed362e08ee check/native-AOT/ORC confirms ExpectedResult rejects in all three
+modes while its I64-only control passes. The changed internal CheckedProgram
+probe admits both; its aggregate still rejects the two wrong Missing diagnostics
+owned by met-2yhf. The separate component20 gate passes with frozen inputs.
+
+Independent re-review identified a remaining rigidity question: traversing a
+known replacement T -> Box[caller T] with callee inference binders can reinterpret
+caller binders. Merely filtering known binders is insufficient when a replacement
+contains caller U sharing an unresolved callee U identity. Preserve the original
+pattern's substitution boundary and compare a known replacement as a rigid
+whole, or retain equivalent provenance. A Source-only recursive regression is
+being executed before further changes; no executable-recursion requirement or
+new source rule is introduced. This checkpoint does not close the task.
+
+The initial recursive Source fixture is not an authoritative RED: both omitted-U
+and explicitly typed-closure control reject earlier with the same opaque generic
+body mismatch. The explicit nested type-argument control also hit parsing before
+inference. Keep these failed probe attempts separate from the confirmed
+ExpectedResult RED. Next isolate known-replacement rigidity at the matcher API
+with caller-owned ParamIds, then reconnect it to a valid Source control.

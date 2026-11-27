@@ -1,0 +1,6 @@
+struct Box[T] { val value: T }
+fn recurse[T, U](owner: T, transform: fn(value: U) -> U) -> (owner: T, transform: fn(value: U) -> U) {
+    val nested: (owner: Box[T], transform: fn(value: Bool) -> Bool) = recurse(owner: <Box[T] value=owner />, transform: fn(value: Bool) -> Bool { return value })
+    return (owner: owner, transform: transform)
+}
+fn main() {}
