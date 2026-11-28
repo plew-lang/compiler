@@ -171,6 +171,10 @@ pub impl SourceTypeUses {
         if token == 0U64 || token > self.scopes.count() { return <Optional.None /> }
         return <Optional.Some v=self.scopes[token - 1U64] />
     }
+    fn hasMethodScope(function: U64) -> Bool {
+        val token = self.methodScopes.getOr(key: function, fallback: 0U64)
+        return token != 0U64 && token <= self.scopes.count()
+    }
     fn methodScopeFor(function: U64) -> Optional[SourceTypeScope] {
         return self.scopeAt(token: self.methodScopes.getOr(key: function, fallback: 0U64))
     }

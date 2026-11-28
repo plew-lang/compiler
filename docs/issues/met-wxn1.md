@@ -496,8 +496,19 @@ The source-level recipe contract excludes direct Raw Arena projections lacking
 a stored receiver; normal Comp.pushType producers normalize that representation.
 
 The 7.5s cap remains unmet, ordinary implementation remains suspended, and no
-hard-to-repair judgment has been made. Next, count repeated signature reads
-under the same exact admitted context/environment and assess scoped retained
-results against the existing saved-evidence contract. Preserve all refusal and
-proof authority checks; do not add a cache keyed only by printed names or
-receiver shape. No task closure or compiler adoption is claimed.
+hard-to-repair judgment has been made. Diagnostic O0 checking counts241858 reader entries and38060 distinct specified
+structural keys; see meta performance-recovery/signature-read-counts.json. Counts
+do not establish a complete cache key or a speedup.
+
+An isolated structural-only success memo passed key/CoW/session controls but did
+not improve warm runtime (8.149641 -> 8.179752 seconds); it is not adopted.
+Diagnostic counters: 241809 eligible reads, 203765 hits, maximum bucket size2.
+
+A narrower scope-presence Bool query and identity receiver shortcut preserve the
+original validation fallback. Baseline targeted counter RED, candidate GREEN;
+presence controls and all24 component profiles pass with unchanged inputs.
+Independent review found no mandatory correction. Warm alternating three-pair
+medians 8.079642 -> 8.012548 seconds, all six LLVM hashes identical. The limited
+improvement is adopted; formal <=7.5 recovery remains unmet. Ordinary type
+checking work stays suspended. Next investigate residual declaration-checking
+cost, without adopting the result memo or promoting bin/seed.
