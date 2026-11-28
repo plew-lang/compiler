@@ -487,3 +487,7 @@ The prior engineering stop assessment did not prove large changes unavoidable.
 Continue from evidence in meta performance-recovery/current-costs, preserving
 all verifier/evidence, fixed input, failure and lifetime boundaries. Stage3
 WIP remains b669e60e and unclosed; no main/bin/seed promotion.
+
+## Whole-suite integration checkpoint
+
+The interrupted performance-control suite 20261128T125023-test-770475 has 62 partial failures, including 39 different failure lines from the older d712 suite. These are a distinct set from the 39-case language matrix above. Every one of those 39 compiler-output cases reproduces with the pre-performance leaf candidate: same compile status, diagnostic, emitted LLVM and runtime C as c55aa51c. They are not introduced by ownership-flow reuse; runtime executions were not replayed and no whole-suite success is claimed. Keep these pending Source integration failures under this unclosed task and triage against the final language matrix when Source work resumes. Evidence: meta performance-recovery/ownership-reuse/whole-partial.json and partial-failure-replay.json (projection-members evidence directory).
