@@ -1,6 +1,6 @@
 ---
 id: met-6qyz
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-28T10:19:27Z
@@ -33,5 +33,10 @@ whole-suite green, formal fixed point or <=7.5 recovery.
 Independent reviewer absolute_cost_review confirmed measurement limits, revised
 candidate ranking after counts, and approved finite investigation closure.
 The initial predecessor/flag candidates were rejected by zero counts; CPU-window
-and LLVM/O0 limits are preserved. Closure reason: investigated. Evidence revision
-will be recorded after the evidence checkpoint is pushed.
+and LLVM/O0 limits are preserved. Closure reason: investigated. Final saved evidence revision: meta6ff870a7; issue/follow-up checkpoint:
+compilerc976411f. Source being investigated: b669e60e candidate behavior
+with only the documented comment difference. Reproducibility helper was run
+and reproduced the exact CPU summary; all complete sample trees conserve
+exclusive self counts. Successful duplicate outputs are deduplicated and
+regenerable compiler IR retired per current-costs/retirement.json; necessary
+inputs, raw samples, carriers/std and shared backend remain for follow-ups.
