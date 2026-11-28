@@ -535,6 +535,12 @@ else
     fail=$((fail + 1)); failed="$failed existential-witnesses-private"
 fi
 
+if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-mid-statement-append.py; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-statement-append-private"
+fi
+
 if PLEWC="$PLEWC" LLVM_CONFIG="$LC" python3 -B ./tests/compiler/codegen/test-direct-array-classifier.py; then
     :
 else

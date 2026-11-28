@@ -714,7 +714,8 @@ pub enum MidTerminator {
 }
 
 pub struct MidBlock {
-    pub val statements: Array[MidStatement] = []
+    // Draft construction appends through the owned place; publication freezes it.
+    pub mut val statements: Array[MidStatement] = []
     pub val terminator: MidTerminator = <MidTerminator.Open />
 }
 pub impl MidBlock { factory }

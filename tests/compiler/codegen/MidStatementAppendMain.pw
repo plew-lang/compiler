@@ -25,6 +25,8 @@ fn main() {
         index += 1U64
     }
     if state.blocks[0U64].statements.count() != 34U64 || outer[0U64].statements.count() != 1U64 || inner.count() != 1U64 || state.blocks[1U64].statements.count() != 1U64 { panic("append broke CoW snapshots") }
+    for block in state.blocks { match block.terminator { MidTerminator.Open => {} _ => { panic("append overwrote an open terminator") } } }
+    match outer[1U64].terminator { MidTerminator.Unreachable => {} _ => { panic("outer snapshot terminator changed") } }
     match state.blocks[0U64].statements[0U64] {
         MidStatement.Assign(destination: val destination, value: val value) => {
             if destination.local != 19U64 || destination.typeTerm != 17U64 || destination.projections.count() != 1U64 { panic("destination changed") }
