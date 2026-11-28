@@ -1,0 +1,20 @@
+// The native counter observes receiver reconstruction, not checker acceptance.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/StructuralSignatureMemo.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic("simple receiver setup: "+diagnostic.message()) } }
+    compiler.admitAuthoredFunctionViews().unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "memoPlainScope").nameId)
+    val source = compiler.sourceTypeUses.signatureFor(function: function).unwrap()
+    val declaration = compiler.arena.functionAt(index: function)
+    val before = compiler.probeReceiverMatches
+    compiler.checkSignatureEnvironment(signature: source, environment: <InstanceEnvironment receiverRef=declaration.recvTy />).unwrap()
+    if compiler.probeReceiverMatches != before { panic("identity signature receiver repeated structural preparation") }
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "memoOtherScope").nameId)
+    val otherReceiver = compiler.arena.functionAt(index: other).recvTy
+    match compiler.checkSignatureEnvironment(signature: source, environment: <InstanceEnvironment receiverRef=otherReceiver />) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("foreign receiver was accepted") } }
+    if compiler.probeReceiverMatches == before { panic("failed identity did not use the original receiver checker") }
+    val viewed = compiler.typeRefWithAddedViewSources(ref: declaration.recvTy, additions: [<ResolvedViewSource surfaceId=77U64 />])
+    val beforeView = compiler.probeReceiverMatches
+    compiler.checkSignatureEnvironment(signature: source, environment: <InstanceEnvironment receiverRef=viewed />).unwrap()
+    if compiler.probeReceiverMatches == beforeView { panic("viewed receiver bypassed the original receiver checker") }
+}

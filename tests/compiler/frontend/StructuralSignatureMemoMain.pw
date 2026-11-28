@@ -1,0 +1,118 @@
+// Native-only counter hook observes interpretation, not lookup or type IDs.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/StructuralSignatureMemo.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("memo setup: "+diagnostic.message()) }
+    }
+    compiler.admitAuthoredFunctionViews().unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "scalar").nameId)
+    val source = compiler.sourceTypeUses.signatureFor(function: function).unwrap()
+    val slots: Array[SourceSignatureSlot] = [<SourceSignatureSlot.Parameter index=0U64 />, <SourceSignatureSlot.Result />]
+    val before = compiler.probeSignatureRecipeReads
+    val first = compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />).unwrap()
+    val cold = compiler.probeSignatureRecipeReads
+    if cold == before { panic("cold read did not interpret its recipes") }
+    val second = compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />).unwrap()
+    if compiler.probeSignatureRecipeReads != cold { panic("warm structural signature read reinterpreted unchanged recipes") }
+    if first.terms.count() != 2U64 || second.terms.count() != 2U64 || !compiler.typeRefEq(a: first.terms[0U64], b: second.terms[0U64]) || !compiler.typeRefEq(a: first.terms[1U64], b: second.terms[1U64]) { panic("memo changed a signature result") }
+    // Slot order and multiplicity remain semantic input, including collisions
+    // in the bucket hash (which deliberately does not include slot spelling).
+    val reordered = compiler.readAdmittedSignatureRoots(source: source, slots: [<SourceSignatureSlot.Result />, <SourceSignatureSlot.Parameter index=0U64 />, <SourceSignatureSlot.Result />], environment: <InstanceEnvironment />).unwrap()
+    if compiler.probeSignatureRecipeReads == cold || reordered.terms.count() != 3U64 { panic("slot order/multiplicity was omitted from the memo input") }
+    val beforeWarm = compiler.probeSignatureRecipeReads
+    compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />).unwrap()
+    if compiler.probeSignatureRecipeReads != beforeWarm { panic("a neighboring request evicted or aliased the exact result") }
+    match compiler.readAdmittedSignatureRoots(source: source, slots: [<SourceSignatureSlot.Parameter index=2U64 />], environment: <InstanceEnvironment />) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("warm memo accepted an invalid slot") } }
+    val saved = compiler.authoredSignatureViews.get(key: function).unwrap()
+    compiler.authoredSignatureViews.remove(key: function)
+    match compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("warm memo hid a missing receipt") } }
+    compiler.authoredSignatureViews[function] = saved
+    val held = compiler.diagnosticAt(offset: 0U64, msg: "memo failure sentinel", failureDomain: <FailureDomain.Internal />)
+    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Failed diagnostic=held />
+    match compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />) { Result.Err(error: val diagnostic) => { if diagnostic.message() != held.message() { panic("warm memo replaced the original failure") } } Result.Ok(value: _) => { panic("warm memo accepted failed admission") } }
+    compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Complete />
+    val parameterRecipe = compiler.sourceTypeUses.useAt(index: source.parameters[0U64] - 1U64).unwrap().recipe
+    compiler.authoredSignatureViews[function] = <AuthoredSignatureViews signature=saved.signature proofs=saved.proofs receiverRecipes=[parameterRecipe] />
+    val beforeReceiver = compiler.probeSignatureRecipeReads
+    compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />).unwrap()
+    if compiler.probeSignatureRecipeReads == beforeReceiver { panic("receiver recipes were omitted from the memo input") }
+    compiler.authoredSignatureViews[function] = <AuthoredSignatureViews signature=saved.signature proofs=[<AuthoredTypeViewProof occurrence=source.parameters[0U64] receiver=first.terms[0U64] selector=<ResolvedViewSource /> proof=0U64 />] />
+    val beforeProof = compiler.probeSignatureRecipeReads
+    compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />).unwrap()
+    if compiler.probeSignatureRecipeReads == beforeProof { panic("proof-bearing request used the structural memo") }
+    compiler.authoredSignatureViews[function] = <AuthoredSignatureViews signature=saved.signature proofs=[] receiverEquations=[<ProjectionNormalizationStep source=first.terms[0U64] proof=0U64 output=first.terms[0U64] />] />
+    val beforeEquation = compiler.probeSignatureRecipeReads
+    compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />).unwrap()
+    if compiler.probeSignatureRecipeReads == beforeEquation { panic("equation-bearing request used the structural memo") }
+    compiler.authoredSignatureViews[function] = saved
+    val beforeContext = compiler.probeSignatureRecipeReads
+    compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />, context: <SignatureRecipeContext.Declaration />).unwrap()
+    if compiler.probeSignatureRecipeReads == beforeContext { panic("context mode was omitted from the memo input") }
+    compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />, context: <SignatureRecipeContext.SourceSelection owner=function />).unwrap()
+    val beforeOwner = compiler.probeSignatureRecipeReads
+    compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />, context: <SignatureRecipeContext.SourceSelection owner=function + 1U64 />).unwrap()
+    if compiler.probeSignatureRecipeReads == beforeOwner { panic("context owner was omitted from exact bucket comparison") }
+    val generic = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "generic").nameId)
+    val genericDeclaration = compiler.arena.functionAt(index: generic)
+    val genericSource = compiler.sourceTypeUses.signatureFor(function: generic).unwrap()
+    val parameters = compiler.copyFuncBinds(binds: genericDeclaration.typeParams)
+    val environment = <InstanceEnvironment params=parameters args=[first.terms[0U64]] />
+    compiler.readAdmittedSignatureRoots(source: genericSource, slots: slots, environment: environment).unwrap()
+    val beforeGenericWarm = compiler.probeSignatureRecipeReads
+    compiler.readAdmittedSignatureRoots(source: genericSource, slots: slots, environment: environment).unwrap()
+    if compiler.probeSignatureRecipeReads != beforeGenericWarm { panic("generic structural substitution was not reused") }
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "memoOther").nameId)
+    val foreign = compiler.copyFuncBinds(binds: compiler.arena.functionAt(index: other).typeParams)
+    match compiler.readAdmittedSignatureRoots(source: genericSource, slots: slots, environment: <InstanceEnvironment params=foreign args=[first.terms[0U64]] />) { Result.Err(error: _) => {} Result.Ok(value: _) => { panic("warm memo hid a foreign same-spelled binder") } }
+    val boolName = compiler.internBytes(s: "Bool")
+    val boolean = compiler.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen)
+    val changed = compiler.readAdmittedSignatureRoots(source: genericSource, slots: slots, environment: <InstanceEnvironment params=parameters args=[boolean] />).unwrap()
+    if !compiler.typeRefEq(a: changed.terms[0U64], b: boolean) || compiler.probeSignatureRecipeReads == beforeGenericWarm { panic("replacement arguments were omitted from the memo input") }
+    // Missing/forward recipes must not become a cached negative or positive.
+    mut val active: Dictionary[U64, Bool] = [:]
+    val arrayFunction = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "memoArray").nameId)
+    val arrayTerm = compiler.funcParamAt(params: compiler.arena.functionAt(index: arrayFunction).params, index: 0U64).ty
+    val pending = compiler.sourceTypeUses.recipeCount() + 2U64
+    val forward = compiler.sourceTypeUses.deriveRecipe(term: arrayTerm, children: [pending], labels: [], origin: <SourceTypeRecipeOrigin.LexicalParameter />)
+    if compiler.structuralSignatureRecipe(recipe: forward, active: inout active) { panic("missing recipe child became ready") }
+    val completed = compiler.sourceTypeUses.deriveRecipe(term: first.terms[0U64], children: [], labels: [], origin: <SourceTypeRecipeOrigin.LexicalParameter />)
+    if completed != pending || !compiler.structuralSignatureRecipe(recipe: forward, active: inout active) { panic("negative classification survived child publication") }
+    val cyclicId = compiler.sourceTypeUses.recipeCount() + 1U64
+    val cyclic = compiler.sourceTypeUses.deriveRecipe(term: arrayTerm, children: [cyclicId], labels: [], origin: <SourceTypeRecipeOrigin.LexicalParameter />)
+    if compiler.structuralSignatureRecipe(recipe: cyclic, active: inout active) { panic("active recipe became a positive classification") }
+    val head = compiler.arena.typeTermAt(index: first.terms[0U64])
+    for legacy in [false, true] {
+        val type = if legacy { give <TypeRef nameStart=head.nameStart nameLen=head.nameLen args=[] viewIds=[77U64] /> } else { give <TypeRef nameStart=head.nameStart nameLen=head.nameLen args=[] viewExtId=77U64 /> }
+        val ref = compiler.arena.registerType(t: type, nameCount: 0U64)
+        val recipe = compiler.sourceTypeUses.deriveRecipe(term: ref, children: [], labels: [], origin: <SourceTypeRecipeOrigin.LexicalParameter />)
+        if compiler.structuralSignatureRecipe(recipe: recipe, active: inout active) { panic("legacy view spelling entered the structural memo") }
+    }
+
+    val isolatedSlots: Array[SourceSignatureSlot] = [<SourceSignatureSlot.Result />, <SourceSignatureSlot.Result />]
+    mut val exposed = {
+        val owned = compiler.readAdmittedSignatureRoots(source: source, slots: isolatedSlots, environment: <InstanceEnvironment />).unwrap()
+        give owned.terms
+    }
+    exposed.set(i: 0U64, value: boolean)
+    val preserved = compiler.readAdmittedSignatureRoots(source: source, slots: isolatedSlots, environment: <InstanceEnvironment />).unwrap()
+    if !compiler.typeRefEq(a: preserved.terms[0U64], b: first.terms[0U64]) { panic("caller mutation changed the cached result") }
+    val representation = compiler.sourceTypeUses.deriveRecipe(term: first.terms[0U64], children: [], labels: [], origin: <SourceTypeRecipeOrigin.ResultRepresentation />, sourceRecipe: parameterRecipe)
+    if !compiler.structuralSignatureRecipe(recipe: representation, active: inout active) { panic("structural representation lost its source dependency") }
+    val bound = compiler.sourceTypeUses.deriveRecipe(term: first.terms[0U64], children: [], labels: [], origin: <SourceTypeRecipeOrigin.BoundSelection />)
+    if compiler.structuralSignatureRecipe(recipe: bound, active: inout active) { panic("bound-dependent recipe entered structural memo") }
+    val beforeAppend = compiler.probeSignatureRecipeReads
+    compiler.arena.registerFunction(compiler.arena.functionAt(index: function), registerSurface: false)
+    compiler.readAdmittedSignatureRoots(source: source, slots: slots, environment: <InstanceEnvironment />).unwrap()
+    if compiler.probeSignatureRecipeReads != beforeAppend { panic("unrelated append invalidated a structural read") }
+    mut val another = <Comp />
+    match analyzeFrontendForRequests(c: inout another, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/StructuralSignatureMemo.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) { Result.Ok(value: _) => {} Result.Err(error: val diagnostic) => { panic("foreign session setup: "+diagnostic.message()) } }
+    another.admitAuthoredFunctionViews().unwrap()
+    another.structuralSignatureReads = compiler.structuralSignatureReads
+    val anotherFunction = another.arena.firstFunctionNamed(nameId: another.internBytes(s: "scalar").nameId)
+    val anotherSource = another.sourceTypeUses.signatureFor(function: anotherFunction).unwrap()
+    val beforeForeign = another.probeSignatureRecipeReads
+    another.readAdmittedSignatureRoots(source: anotherSource, slots: slots, environment: <InstanceEnvironment />).unwrap()
+    if another.probeSignatureRecipeReads == beforeForeign { panic("foreign compilation session reused another session's result") }
+
+}

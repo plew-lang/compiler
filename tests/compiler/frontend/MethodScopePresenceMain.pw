@@ -1,0 +1,31 @@
+// Scope presence is an existence query, not a copy of its implementation data.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/StructuralSignatureMemo.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("scope presence setup: "+diagnostic.message()) }
+    }
+    compiler.admitAuthoredFunctionViews().unwrap()
+    val function = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "memoPlainScope").nameId)
+    val source = compiler.sourceTypeUses.signatureFor(function: function).unwrap()
+    val declaration = compiler.arena.functionAt(index: function)
+    if !compiler.sourceTypeUses.methodScopeFor(function: function).isSome() { panic("method has no scope") }
+    val free = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "scalar").nameId)
+    if compiler.sourceTypeUses.methodScopeFor(function: free).isSome() { panic("free function acquired a method scope") }
+    compiler.checkSignatureEnvironment(signature: source, environment: <InstanceEnvironment receiverRef=declaration.recvTy />).unwrap()
+    val other = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "memoOtherScope").nameId)
+    val otherReceiver = compiler.arena.functionAt(index: other).recvTy
+    match compiler.checkSignatureEnvironment(signature: source, environment: <InstanceEnvironment receiverRef=otherReceiver />) {
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != "method signature has a foreign selected receiver" { panic("receiver rejection changed its diagnostic") } }
+        Result.Ok(value: _) => { panic("unrelated nominal receiver was accepted") }
+    }
+    match compiler.checkSignatureEnvironment(signature: source, environment: <InstanceEnvironment />) {
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != "method signature requires its selected receiver" { panic("missing receiver changed its diagnostic") } }
+        Result.Ok(value: _) => { panic("missing receiver was accepted") }
+    }
+    for index in 0U64..<compiler.arena.functionCount() {
+        if compiler.sourceTypeUses.hasMethodScope(function: index) != compiler.sourceTypeUses.methodScopeFor(function: index).isSome() { panic("scope presence disagrees with the full reader") }
+    }
+    if compiler.sourceTypeUses.hasMethodScope(function: compiler.arena.functionCount() + 100U64) { panic("unknown function has a method scope") }
+
+}

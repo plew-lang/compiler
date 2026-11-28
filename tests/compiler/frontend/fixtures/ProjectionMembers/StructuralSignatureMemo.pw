@@ -1,0 +1,9 @@
+fn scalar(value: I64) -> I64 { return value }
+fn generic[T](value: T) -> T { return value }
+fn main() {}
+fn memoOther[T](value: T) -> T { return value }
+fn memoArray(value: Array[I64]) -> Array[I64] { return value }
+struct MemoScopePlain {}
+impl MemoScopePlain { fn memoPlainScope() -> I64 { return 1I64 } }
+struct MemoScopeOther {}
+impl MemoScopeOther { fn memoOtherScope() -> I64 { return 2I64 } }
