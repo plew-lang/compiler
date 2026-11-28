@@ -7,7 +7,7 @@ use ../Frontend only { Comp, PreparedSemanticFacts }
 use ../Ir only { Global, MatchSource, SemanticMatchKind, SemanticMatchPayload, TypeHeadReader }
 use ./Ir only { MidCanonicalArena, canonicalMidPlaceIsWhole, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidClosureCaptureNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidBody, MidOwnership, MidLocalDecl }
 use ./Types only { canonicalMidStatementTypesMatch, canonicalMidTerminatorTypesMatch, canonicalMidBodyParameterTypesMatch }
-use ./Drop only { analyzeCanonicalMidOwnershipFlow }
+use ./Drop only { MidComputedOwnership, computeCanonicalMidOwnership }
 
 // Verification phases have different representation contracts. Declaration
 // ownership may consume symbolic conversion boundaries; executable admission
@@ -594,17 +594,31 @@ fn verifyCanonicalEnumDestructure(c: inout Comp, body: MidBodyNode, statement: M
 
 // Executable admission and earlier structural verification share one walk.
 pub fn verifyExecutableCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
-    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Executable />)
+    mut val retained: Optional[MidComputedOwnership] = <Optional.None />
+    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Executable />, retainFlow: false, retained: inout retained)
 }
 
 pub fn verifyCanonicalMidBody(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
-    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Instantiated />)
+    mut val retained: Optional[MidComputedOwnership] = <Optional.None />
+    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Instantiated />, retainFlow: false, retained: inout retained)
 }
 
 // This proves ownership dataflow only. It does not certify conversion
 // eligibility, access elaboration, or whole-body semantic checking.
 pub fn verifyDeclarationMidOwnership(c: inout Comp, canonical: MidCanonicalBody) -> MidVerification {
-    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Declaration />)
+    mut val retained: Optional[MidComputedOwnership] = <Optional.None />
+    return verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Declaration />, retainFlow: false, retained: inout retained)
+}
+
+// Publish the fixed point only after all declaration checks have succeeded.
+// This is body-local dataflow evidence, never executable admission.
+pub fn verifyDeclarationMidOwnershipWithFlow(c: inout Comp, canonical: MidCanonicalBody) -> Result[MidComputedOwnership, MidVerification] {
+    mut val retained: Optional[MidComputedOwnership] = <Optional.None />
+    val verification = verifyCanonicalMidBodyStage(c: inout c, canonical: canonical, stage: <MidVerificationStage.Declaration />, retainFlow: true, retained: inout retained)
+    match verification.error {
+        MidVerifyError.None => { return <Result.Ok value=retained.unwrap() /> }
+        _ => { return <Result.Err error=verification /> }
+    }
 }
 
 // Copy requires a copyable semantic value, not merely available retain/drop
@@ -859,7 +873,7 @@ fn verifyCanonicalMidBindingOrigins(c: inout Comp, body: MidBodyNode) -> MidVeri
     return <MidVerification />
 }
 
-fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage: MidVerificationStage) -> MidVerification {
+fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage: MidVerificationStage, retainFlow: Bool, retained: inout Optional[MidComputedOwnership]) -> MidVerification {
     val executable = stage.isExecutable()
     if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     if !c.mid.isWellFormed(body: canonical) { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
@@ -869,7 +883,9 @@ fn verifyCanonicalMidBodyStage(c: inout Comp, canonical: MidCanonicalBody, stage
     if executable && !canonicalMidBodyParameterTypesMatch(c: inout c, body: body) { return <MidVerification error=<MidVerifyError.TypeMismatch /> /> }
     val origins = verifyCanonicalMidBindingOrigins(c: inout c, body: body)
     match origins.error { MidVerifyError.None => {} _ => { return origins } }
-    val analysis = analyzeCanonicalMidOwnershipFlow(arena: c.mid, canonical: canonical)
+    val computed = computeCanonicalMidOwnership(arena: c.mid, canonical: canonical)
+    val analysis = computed.analysis()
+    if retainFlow { retained = <Optional.Some v=computed /> }
     val incoming = analysis.incoming
     val reachable = analysis.reachable
 

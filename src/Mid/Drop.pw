@@ -162,6 +162,20 @@ pub struct MidOwnershipAnalysis {
 }
 pub impl MidOwnershipAnalysis { factory }
 
+// A computed fixed point is paired with its immutable input, not with a
+// caller-supplied replacement body. Keep it within the owning append-only
+// arena lifetime; it is analysis data, not executable admission evidence.
+pub struct MidComputedOwnership {
+    pub val canonical: MidCanonicalBody
+    val flow: MidOwnershipAnalysis
+}
+pub impl MidComputedOwnership {
+    fn analysis() -> MidOwnershipAnalysis { return self.flow }
+}
+pub fn computeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> MidComputedOwnership {
+    return <MidComputedOwnership canonical=canonical flow=analyzeCanonicalMidOwnershipFlow(arena: arena, canonical: canonical) />
+}
+
 pub fn analyzeCanonicalMidOwnership(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> Array[MidOwnershipStates] {
     return analyzeCanonicalMidOwnershipFlow(arena: arena, canonical: canonical).incoming
 }
@@ -818,9 +832,17 @@ fn canonicalMidCopyIdentityTerminator(arena: inout MidCanonicalArena, terminator
 // not executable: the typed preparation pipeline still requires instantiation,
 // access elaboration, and verification before issuing an executable token.
 pub fn elaborateCanonicalMidDrops(arena: inout MidCanonicalArena, canonical: MidCanonicalBody) -> MidCanonicalBody {
+    val computed = computeCanonicalMidOwnership(arena: arena, canonical: canonical)
+    return elaborateCanonicalMidDropsWithOwnership(arena: inout arena, computed: computed)
+}
+
+// The caller retains the same append-only arena that produced computed.
+// New instantiated/access/drop snapshots require their own computation.
+pub fn elaborateCanonicalMidDropsWithOwnership(arena: inout MidCanonicalArena, computed: MidComputedOwnership) -> MidCanonicalBody {
+    val canonical = computed.canonical
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidCanonicalBody body=0U64 /> }
     val source: MidBodyNode = arena.bodies[canonical.body - 1U64]
-    val ownership: Array[MidOwnershipStates] = analyzeCanonicalMidOwnership(arena: arena, canonical: canonical)
+    val ownership: Array[MidOwnershipStates] = computed.analysis().incoming
     val accessibility: Array[MidAccessibilityStates] = analyzeCanonicalMidAccessibility(arena: arena, canonical: canonical)
     val plan: MidCanonicalDropPlan = canonicalMidDropPlan(arena: arena, canonical: canonical, ownership: ownership, accessibility: accessibility)
     // With no added cliff, the transfer function and entry state are unchanged.

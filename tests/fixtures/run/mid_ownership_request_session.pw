@@ -1,0 +1,91 @@
+// A request cache cannot grant a different compilation session its result.
+use /Frontend only { Comp }
+use /Mid/Ir only { MidBody, MidBlock, MidTerminator, MidOperand, MidConstant, MidLocalDecl, MidPlace, MidCallTarget, MidCallReceiver, MidCanonicalBody, MidOwnership }
+use /Mid/Prepare only { MidParametricBody }
+use /Mid/OwnershipAnalysis only { MidOwnershipRequests }
+use /Mid/Verify only { MidVerifyError, verifyDeclarationMidOwnership, verifyDeclarationMidOwnershipWithFlow }
+use /Mid/Drop only { elaborateCanonicalMidDrops, elaborateCanonicalMidDropsWithOwnership, computeCanonicalMidOwnership }
+use @Std/Io only { print }
+
+// Both Drop entry points must preserve loop/join/unreachable topology. The
+// retained result is for the original input, never for the appended output.
+fn compareFlow(input: MidBody) {
+    mut val c = <Comp />
+    val original = c.mid.store(body: input)
+    val computed = verifyDeclarationMidOwnershipWithFlow(c: inout c, canonical: original).unwrap()
+    val ordinary = elaborateCanonicalMidDrops(arena: inout c.mid, canonical: original)
+    val retained = elaborateCanonicalMidDropsWithOwnership(arena: inout c.mid, computed: computed)
+    val left = c.mid.bodies[ordinary.body - 1U64]
+    val right = c.mid.bodies[retained.body - 1U64]
+    if left.blocks.len != right.blocks.len || left.locals.len != right.locals.len || left.entry != right.entry { panic("flow changed body shape") }
+    mut val index = 0U64
+    while index < left.blocks.len {
+        val a = c.mid.blocks[left.blocks.start + index]
+        val b = c.mid.blocks[right.blocks.start + index]
+        val x = c.mid.terminators[a.terminator - 1U64]
+        val y = c.mid.terminators[b.terminator - 1U64]
+        if a.statements.len != b.statements.len || x.tag != y.tag || x.target != y.target || x.otherwise != y.otherwise || x.cases.len != y.cases.len { panic("flow changed topology") }
+        index += 1U64
+    }
+    match verifyDeclarationMidOwnership(c: inout c, canonical: retained).error { MidVerifyError.None => {} _ => { panic("retained output invalid") } }
+    val next = verifyDeclarationMidOwnershipWithFlow(c: inout c, canonical: retained).unwrap()
+    if next.canonical.body != retained.body || next.canonical.body == computed.canonical.body { panic("rewritten body reused old flow") }
+}
+
+fn checkConditionalFlow() {
+    mut val c = <Comp />
+    val owner = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=false ownsAtEntry=true />
+    val result = <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />
+    val place = <MidPlace local=0U64 />
+    val resultPlace = <MidPlace local=1U64 />
+    val condition = <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> />
+    val entry = <MidBlock terminator=<MidTerminator.Switch discriminant=condition values=[1I64] targets=[1U64] otherwise=2U64 /> />
+    val moved = <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[<MidOperand.Move place=place />] destination=resultPlace target=3U64 /> />
+    val kept = <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />
+    val join = <MidBlock terminator=<MidTerminator.Return /> />
+    val original = c.mid.store(body: <MidBody locals=[owner, result] blocks=[entry, moved, kept, join] />)
+    val computed = computeCanonicalMidOwnership(arena: c.mid, canonical: original)
+    match computed.analysis().incoming[3U64][0U64] { MidOwnership.MaybeOwned => {} _ => { panic("conditional ownership lost") } }
+    val output = elaborateCanonicalMidDropsWithOwnership(arena: inout c.mid, computed: computed)
+    val node = c.mid.bodies[output.body - 1U64]
+    val block = c.mid.blocks[node.blocks.start + 3U64]
+    val drop = c.mid.statements[block.statements.start]
+    val clear = c.mid.statements[block.statements.start + 1U64]
+    if drop.tag != 4U64 || c.mid.places[drop.destination - 1U64].local != 0U64 { panic("conditional drop lost owner") }
+    if clear.tag != 5U64 || clear.isSet || clear.flag != drop.flag { panic("conditional drop flag not cleared") }
+}
+
+fn main() {
+    checkConditionalFlow()
+    mut val malformed = <Comp />
+    match verifyDeclarationMidOwnershipWithFlow(c: inout malformed, canonical: <MidCanonicalBody body=0U64 />) {
+        Result.Err(error: val failure) => { match failure.error { MidVerifyError.InvalidTarget => {} _ => { panic("wrong malformed flow error") } } }
+        _ => { panic("malformed input produced flow") }
+    }
+    compareFlow(input: <MidBody blocks=[<MidBlock terminator=<MidTerminator.Goto target=0U64 /> />, <MidBlock terminator=<MidTerminator.Return /> />] />)
+    val condition = <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> />
+    compareFlow(input: <MidBody blocks=[<MidBlock terminator=<MidTerminator.Switch discriminant=condition values=[1I64] targets=[1U64] otherwise=2U64 /> />, <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />, <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />, <MidBlock terminator=<MidTerminator.Return /> />] />)
+    mut val first = <Comp />
+    mut val second = <Comp />
+    val input = <MidBody blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />
+    val original = first.mid.store(body: input)
+    val foreign = second.mid.store(body: input)
+    mut val requests = <MidOwnershipRequests />
+    val accepted = requests.request(c: inout first, body: <MidParametricBody.input canonical=original />).unwrap()
+    mut val unregistered = <MidOwnershipRequests />
+    match unregistered.destructionBody(c: inout first, body: accepted) {
+        Result.Err(error: _) => {}
+        _ => { panic("unregistered request received token") }
+    }
+    first.mid.store(body: input)
+    requests.destructionBody(c: inout first, body: accepted).unwrap()
+    match requests.request(c: inout second, body: <MidParametricBody.input canonical=foreign />) {
+        Result.Err(error: val failure) => { match failure.error { MidVerifyError.InvalidTarget => {} _ => { panic("wrong session failure") } } }
+        _ => { panic("foreign session received cached ownership") }
+    }
+    match requests.destructionBody(c: inout second, body: accepted) {
+        Result.Err(error: val failure) => { match failure.error { MidVerifyError.InvalidTarget => {} _ => { panic("wrong destruction session failure") } } }
+        _ => { panic("foreign session received destruction body") }
+    }
+    print("ok")
+}
