@@ -1,7 +1,7 @@
 ---
 id: met-wxn1
 status: in_progress
-deps: [met-4dxy, met-y2ec]
+deps: [met-4dxy, met-y2ec, met-k93s]
 links: []
 created: 2026-11-27T15:58:48Z
 type: task
@@ -457,3 +457,30 @@ Review identifies this possible loss of original-node boundaries. A dedicated
 recursive Source fixture is being checked before finalizing that representation.
 The isolated canonical-readers build uses an earlier frozen source, not these
 later Generic/provided changes; do not confuse it with a final candidate.
+
+## Performance recovery priority
+
+Normal implementation is suspended until the self-host median is at most 7.5s.
+The frozen current-source candidate reached a generation-2 fixed point in
+`20261128T041820-self-host-1997cd`; samples are 8.760432, 8.216416 and
+8.293744s, median 8.293744s. This candidate-start diagnostic is not promotion
+of the adopted carrier. Evidence: meta
+`evidence/rejection-domains/diagnostic-domain-implementation/projection-members/performance-recovery/`.
+The closed-term early-return experiment built successfully, but alternating
+three pairs gave 8.171744s before versus 8.212380s after, all LLVM outputs equal.
+It is not adopted. Source review additionally found malformed unknown-closedness
+input and raw view normalization risks.
+
+Authorized CPU sample (2–5s interval) and exact frozen-symbol mapping are in
+meta scratch `tmp/performance-recovery-current/cpu-profile-authorized` and
+`symbols.json`; baseline profile input and source are fixed. Declaration
+completion and Mid construction appear in that interval; this is not a
+whole-run attribution or exact percentage claim.
+
+The next bounded experiment delays `parametricSelfRef` in
+`callableParameterPatterns` until the first associated projection. Existing
+nonprojection reads return before consuming this receiver, so the experiment
+removes unused preparation without changing admission failure checks. Frozen
+source: `tmp/performance-recovery-lazy-pattern/compiler`; build
+`20261128T044837-build-3e1831` is pending. Production source remains unchanged
+by either performance experiment. No recovery claim or task closure.
