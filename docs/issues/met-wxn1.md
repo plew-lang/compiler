@@ -512,3 +512,15 @@ medians 8.079642 -> 8.012548 seconds, all six LLVM hashes identical. The limited
 improvement is adopted; formal <=7.5 recovery remains unmet. Ordinary type
 checking work stays suspended. Next investigate residual declaration-checking
 cost, without adopting the result memo or promoting bin/seed.
+
+Complete SourceParameters vector forwarding passed build/native24/source review
+but warm medians 8.025435 -> 8.077316 seconds showed no gain (LLVM identical).
+Not adopted. Next isolate temporary memo administration for nonrecursive leaf
+recipes; preserve every proof, environment and malformed-input boundary.
+
+Authored leaf memo administration: preserve complete interpretation but omit
+final memo entries for leaves with no children/sourceRecipe/projection/views.
+Build and native24 passed; independent source review found no mandatory issue.
+Warm medians 8.072792 -> 8.011871 seconds, all LLVM identical. Limited adoption;
+not formal recovery. Next count reader modes by declaration phases, retaining
+all checks. No method/result work or carrier/seed promotion is resumed.

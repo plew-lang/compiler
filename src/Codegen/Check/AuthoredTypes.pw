@@ -1222,7 +1222,11 @@ impl Comp {
             SourceTypeRecipeOrigin.BoundSelection => { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "signature reader encountered an unadmitted bound recipe", failureDomain: <FailureDomain.Internal />) /> }
         }
         val read = <AuthoredRecipeRead term=term views=sourceViews normalizations=normalizations outputSelector=outputSelector />
-        memo[recipe] = read
+        // A leaf without selectors has no recursive proof or child work to
+        // share. Keep its full interpretation, without adding a memo entry.
+        val leaf = node.children.count() == 0U64 && node.sourceRecipe == 0U64 && original.assocNameId == 0U64 && self.arena.typeViewSourceCount(ref: node.term) == 0U64
+        val authoredLeaf = match node.origin { SourceTypeRecipeOrigin.Authored => leaf, _ => false }
+        if !authoredLeaf { memo[recipe] = read }
         return <Result.Ok value=read />
     }
 
