@@ -1,0 +1,11 @@
+trait Marker {}
+struct Wrap[R] {}
+impl[R] Wrap[R] as Marker {}
+impl Marker {
+    fn inspect[U](owner: (value: Self), values: Array[Self], select: fn(value: Self) -> Self, transform: fn(value: U) -> U) -> (fixed: Self, transform: fn(value: U) -> U) {
+        val next = <Wrap[U] />
+        val result: (fixed: Wrap[U], transform: fn(value: Bool) -> Bool) = next.inspect(owner: (value: </>), values: [], select: fn(value) { return value }, transform: fn(value) { return value })
+        return (fixed: owner.value, transform: transform)
+    }
+}
+fn main() {}

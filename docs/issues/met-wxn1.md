@@ -524,3 +524,39 @@ Build and native24 passed; independent source review found no mandatory issue.
 Warm medians 8.072792 -> 8.011871 seconds, all LLVM identical. Limited adoption;
 not formal recovery. Next count reader modes by declaration phases, retaining
 all checks. No method/result work or carrier/seed promotion is resumed.
+
+## Performance recovery stop boundary
+
+Ordinary met-y2ec/Source work remains suspended until formal <=7.5s recovery.
+The header/scope/leaf changes yield only limited improvements. Closed grounding,
+lazy receiver preparation, structural result memo, vector forwarding and
+identity-write experiments did not demonstrate sufficient recovery.
+
+Latest finite old/current same-target coarse-phase diagnostic: instrumented
+wall medians7.519873/8.091147s. Added exclusive Record0.250s, Generic0.001s,
+Verify0.132s, Rest0.060s, outside0.129s. All receiver-number-normalized LLVM
+equal, inputs unchanged. Separate inclusive retained-signature reads~0.356s
+include mandatory first reads and observer effects; do not sum them with phase
+deltas or treat them as entirely removable. No formal recovery is claimed.
+
+Engineering judgment, independently reviewed: no currently identified local
+repair supports <=7.5 recovery; broader multi-phase investigation/repair is
+needed before resuming. This is not proof that a large change is technically
+inevitable, nor evidence selecting a cache architecture. All handles collected.
+
+On explicitly authorized resumption, attribute added signature interpretation,
+construction receipt and fixed-replacement work within Record/Verify/Rest, and
+explain outside-phase cost. Separate necessary semantics from recalculation.
+If transfer of checked results is justified, preserve exact selection revision,
+readiness, source owner/scope/session, environment/proof and fact lifetime across
+consumers. Do not silently use scalar diagnostic keys as reuse authority.
+
+Source-reviewed small opportunities remain unproven recovery candidates: empty
+argument signature reads in Verify/Generic (12347/62); duplicate projection
+presence queries in callableParameterPatterns; repeated construction-head
+occurrence/use extraction. Preserve admission and current-expression checks;
+do not try them sequentially without measured contribution.
+
+Evidence and final independent assessment: meta projection-members/
+performance-recovery/{declaration-phase-*,recovery-decision-review.md}.
+Pending feature work is preserved as WIP, not completed or promoted.

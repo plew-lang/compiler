@@ -10,6 +10,8 @@ impl Comp {
         val binder = self.funcBindAt(binds: declaration.typeParams, index: 0U64)
         val symbolic = self.pushType(t: <TypeRef nameStart=binder.nameStart nameLen=binder.nameLen nameId=binder.nameId paramId=binder.paramId args=[] />)
         val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: declaration.typeParams) args=[symbolic] />
+        val patterns = try self.callableParameterPatterns(function: function)
+        if patterns.count() == 0U64 || self.arena.typeAt(index: patterns[0U64]).assocTraitId != self.internBytes(s: "Parent").nameId { panic("open pattern read did not admit its source signature") }
         val result = try self.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.SourceParameters />)
         if result.isNone() || !self.authoredSignatureViews.contains(key: function) { panic("open admission did not publish its source signature") }
         val parameter = self.arena.typeAt(index: result.unwrap().parameterTypes[0U64])
@@ -43,11 +45,19 @@ fn main() {
             match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("lost receipt acquired Source authority") } }
         }
     }
+    match compiler.callableParameterPatterns(function: function) {
+        Result.Ok(value: _) => { panic("completed pattern read accepted a lost receipt") }
+        Result.Err(error: val diagnostic) => { match diagnostic.failureDomain() { FailureDomain.Internal => {} _ => { panic("missing pattern receipt acquired Source authority") } } }
+    }
     val held = compiler.diagnosticAt(offset: declaration.nameStart, msg: "retained signature admission sentinel", failureDomain: <FailureDomain.Internal />)
     compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Failed diagnostic=held />
     match compiler.readRetainedCallableTypes(function: function, environment: environment, read: <CallableSignatureRead.SourceResult />) {
         Result.Ok(value: _) => { panic("failed admission produced a result") }
         Result.Err(error: val diagnostic) => { if diagnostic.message() != held.message() { panic("failed admission replaced the original diagnostic") } }
+    }
+    match compiler.callableParameterPatterns(function: function) {
+        Result.Ok(value: _) => { panic("failed admission produced a pattern") }
+        Result.Err(error: val diagnostic) => { if diagnostic.message() != held.message() { panic("pattern read replaced the original admission failure") } }
     }
     compiler.authoredSignatureAdmission = <AuthoredSignatureAdmissionPhase.Complete />
     val mainIndex = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "main").nameId)
@@ -58,4 +68,5 @@ fn main() {
         Result.Err(error: val diagnostic) => { panic("Raw admission: "+diagnostic.message()) }
     }
     if rawRead.isSome() || compiler.authoredSignatureViews.contains(key: raw) || compiler.sourceTypeUses.signatureFor(function: raw).isSome() { panic("Raw registration acquired Source signature authority") }
+    if compiler.callableParameterPatterns(function: raw).unwrap().count() != 0U64 || compiler.authoredSignatureViews.contains(key: raw) { panic("Raw pattern read acquired Source signature authority") }
 }

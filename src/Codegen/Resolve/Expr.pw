@@ -1961,26 +1961,31 @@ impl Comp {
     // A known replacement belongs to the caller. Match it as a whole,
     // never re-enter its children as inference variables of this declaration.
     // The map is private to one proposal and keyed by the original pattern node.
-    inout fn prepareResultPatternBoundaries(ref: U64, params: FuncBindRange, known: Array[U64], receiver: U64, rigidPatternTerms: inout Dictionary[U64, U64]) -> Result[(), CompileDiagnostic] {
+    inout fn prepareCallPatternBoundaries(ref: U64, environment: InstanceEnvironment, parameters: FuncBindRange, values: Array[U64], rigidPatternTerms: inout Dictionary[U64, U64]) -> Result[(), CompileDiagnostic] {
         if ref == 0U64 || rigidPatternTerms.contains(key: ref) { return <Result.Ok value=() /> }
         val node = self.arena.typeTermAt(index: ref)
-        if node.paramId != 0U64 && node.assocNameId == 0U64 {
-            for index in 0U64..<params.count() {
-                if self.funcBindAt(binds: params, index: index).paramId == node.paramId && index < known.count() && known[index] != 0U64 {
-                    // Keep any explicit views on a known parameter, too.
-                    rigidPatternTerms[ref] = try self.groundKnownCallTypeArguments(ref: ref, params: params, values: known, receiver: receiver)
+        if node.assocNameId == 0U64 {
+            match self.typeTermHeadReplacement(ref: ref, params: environment.params, values: environment.args, selfRef: environment.receiverRef, itemRef: 0U64) {
+                Optional.Some(v: val replacement) => {
+                    if replacement == 0U64 { return <Result.Ok value=() /> }
+                    // This also covers nominal impl Self without a ParamId.
+                    rigidPatternTerms[ref] = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
                     return <Result.Ok value=() />
                 }
+                Optional.None => {}
             }
         }
         if node.assocNameId != 0U64 {
-            val substituted = try self.groundKnownCallTypeArguments(ref: ref, params: params, values: known, receiver: receiver)
-            val closed = try self.closeBodyProjectionTerms(ref: substituted, environment: <InstanceEnvironment />, selfRef: receiver, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
+            // A projection still depending on an unknown callee slot is an
+            // obligation for later operands, not a fixed receiver replacement.
+            if self.callArgumentHasInferenceHole(expected: ref, parameters: parameters, values: values) { return <Result.Ok value=() /> }
+            val substituted = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: environment.receiverRef)
+            val closed = try self.closeBodyProjectionTerms(ref: substituted, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
             rigidPatternTerms[ref] = closed
             return <Result.Ok value=() />
         }
         for index in 0U64..<self.typeTermRefChildCount(ref: ref) {
-            try self.prepareResultPatternBoundaries(ref: self.typeTermRefChildRef(ref: ref, index: index), params: params, known: known, receiver: receiver, rigidPatternTerms: inout rigidPatternTerms)
+            try self.prepareCallPatternBoundaries(ref: self.typeTermRefChildRef(ref: ref, index: index), environment: environment, parameters: parameters, values: values, rigidPatternTerms: inout rigidPatternTerms)
         }
         return <Result.Ok value=() />
     }
@@ -2012,7 +2017,10 @@ impl Comp {
                     val declaration = try self.lexicalCallableResultType(function: callee)
                     give self.groundTermInEnvironment(ref: declaration, params: [], values: [], selfRef: patternReceiver)
                 }
-                try self.prepareResultPatternBoundaries(ref: resultPattern, params: function.typeParams, known: current, receiver: patternReceiver, rigidPatternTerms: inout rigidPatternTerms)
+                val selectedPatternReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: current)
+                val partialPatternEnvironment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: selectedPatternReceiver, typeArgs: current, proof: proof)
+                val patternEnvironment = try self.knownMethodSignatureEnvironment(f: function, environment: partialPatternEnvironment)
+                try self.prepareCallPatternBoundaries(ref: resultPattern, environment: patternEnvironment, parameters: function.typeParams, values: current, rigidPatternTerms: inout rigidPatternTerms)
                 val boundaries: Optional[Dictionary[U64, U64]] = if rigidPatternTerms.count() == 0U64 { give <Optional.None /> } else { give <Optional.Some v=rigidPatternTerms /> }
                 val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: resultPattern, expectedTerm: expectedTerm, rigidPatternTerms: boundaries)
                 if completed.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: completed) { return <Result.Ok value=<Optional.None /> /> }
@@ -2055,7 +2063,9 @@ impl Comp {
                             val declaration = try self.lexicalCallableResultType(function: callee)
                             pattern = self.groundTermInEnvironment(ref: declaration, params: lexical.params, values: lexical.args, selfRef: receiverTerm)
                         }
-                        try self.prepareResultPatternBoundaries(ref: pattern, params: function.typeParams, known: current, receiver: receiverTerm, rigidPatternTerms: inout rigidPatternTerms)
+                        val partial = try self.recordedDirectCallEnvironment(function: function, receiverTerm: receiverTerm, typeArgs: current, proof: selectedProof)
+                        val known = try self.knownMethodSignatureEnvironment(f: function, environment: partial)
+                        try self.prepareCallPatternBoundaries(ref: pattern, environment: known, parameters: function.typeParams, values: current, rigidPatternTerms: inout rigidPatternTerms)
                         proof = selectedProof
                     }
                     StaticMemberResolution.Missing => { return <Result.Ok value=<Optional.None /> /> }
@@ -2114,11 +2124,11 @@ pub impl Comp {
     inout fn providedExpectedResultPattern(callee: U64, receiver: U64, proof: StaticConformanceProof) -> Result[U64, CompileDiagnostic] {
         if receiver == 0U64 { return <Result.Ok value=0U64 /> }
         val declaration = self.arena.functionAt(index: callee)
-        // Receiver/impl bindings are fixed; method-owned binders remain in
-        // the original pattern until the shared rigid-boundary matcher.
-        val partial = try self.methodReceiverSignatureEnvironment(f: declaration, semanticReceiver: receiver, selectedProof: proof)
-        val environment = try self.withLexicalSelfBinding(f: declaration, environment: partial)
-        return <Result.Ok value=(try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)).resultType />
+        try self.requireStaticSignatureProof(proof: proof, offset: declaration.defOffset)
+        val admitted = try self.admittedSourceSignature(function: callee)
+        // Keep every original node, including lexical Self. Receiver/impl
+        // replacements become rigid boundaries in the explicit known map.
+        return self.lexicalCallableResultType(function: admitted.signature.function)
     }
 
     // Read selected bindings first. Only an actually unselected occurrence
@@ -2138,7 +2148,7 @@ pub impl Comp {
         val function = self.arena.functionAt(index: callee)
         val selectedReceiver = self.syntheticCallReceiverTerm(exprId: exprId, fallback: receiverRef)
         val environment = if selectedReceiver != 0U64 {
-            val patterns: Array[U64] = if function.typeParams.count() == 0U64 { give [] } else { give try self.lexicalBodyParameterTypes(function: callee, receiver: selectedReceiver) }
+            val patterns: Array[U64] = if function.typeParams.count() == 0U64 { give [] } else { give try self.callableParameterPatterns(function: callee) }
             give (try self.finalMethodEnvironmentWithOrigin(f: function, receiverRef: selectedReceiver, args: args, parameterTypes: patterns, inferenceOrigin: <GenericCallInferenceOrigin.Raw />))
         } else {
             give (try self.freeCallParameterEnvironment(callee: callee, args: args))

@@ -368,6 +368,7 @@ pub impl Comp {
     // Substitute only known slots; zero must not erase an unbound method term.
     inout fn groundKnownCallTypeArguments(ref: U64, params: FuncBindRange, values: Array[U64], receiver: U64) -> Result[U64, CompileDiagnostic] {
         if values.count() != params.count() { return <Result.Err error=self.diagnosticAt(offset: 0U64, msg: "internal error: candidate type argument map has the wrong size") /> }
+        if params.count() == 0U64 && receiver == 0U64 { return <Result.Ok value=ref /> }
         mut val knownParams: Array[Bind] = []
         mut val knownValues: Array[U64] = []
         mut val index = 0U64
@@ -398,8 +399,12 @@ pub impl Comp {
             index += 1U64
         }
         val environment = try self.withLexicalSelfBinding(f: declaration, environment: <InstanceEnvironment params=parameters args=values receiverRef=bound.subject proof=proof />)
-        val types = try self.providedSourceSignature(function: function, environment: environment, read: <CallableSignatureRead.SourceParameters />)
-        return self.callableParameterTypeMatchRank(function: declaration, args: args, signatures: types.parameterTypes, receiver: bound.subject, initialValues: values)
+        try self.requireStaticSignatureProof(proof: proof, offset: declaration.defOffset)
+        val admitted = try self.admittedSourceSignature(function: function)
+        val types = try self.callableParameterPatterns(function: admitted.signature.function)
+        val known = try self.knownMethodSignatureEnvironment(f: declaration, environment: environment)
+        val prepared = try self.prepareCallParameterPatterns(patterns: types, environment: known, parameters: declaration.typeParams, values: values, item: 0U64)
+        return self.callableParameterTypeMatchRank(function: declaration, args: args, signatures: prepared.types, receiver: bound.subject, initialValues: values, rigidPatternTerms: prepared.boundaries)
     }
 
     // Canonical protocols already carry an exact admitted instance. Select

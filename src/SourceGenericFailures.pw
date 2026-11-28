@@ -3,9 +3,9 @@ impl SourceGenericCallConflict { factory }
 impl Comp {
     // A candidate mutation is committed only for Matched/Deferred. Both Raw
     // callers and source inference consume this one transactional decision.
-    inout fn callTypeArgumentExtension(pattern: U64, argument: U64, params: FuncBindRange, values: Array[U64]) -> (matched: TypeArgumentMatch, values: Array[U64]) {
+    inout fn callTypeArgumentExtension(pattern: U64, argument: U64, params: FuncBindRange, values: Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> (matched: TypeArgumentMatch, values: Array[U64]) {
         mut val candidate = values
-        val matched = self.matchCallTypeArguments(pattern: pattern, argument: argument, params: params, values: inout candidate)
+        val matched = self.matchTypeArgumentConstraints(pattern: pattern, argument: argument, params: <PatternBindInput.Function range=params />, values: inout candidate, rigidPatternTerms: rigidPatternTerms)
         return (matched: matched, values: candidate)
     }
 

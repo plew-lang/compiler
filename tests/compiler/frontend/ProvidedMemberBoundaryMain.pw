@@ -1,0 +1,36 @@
+// Static trait dispatch must preserve the same fixed Self as nominal ranking.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/RecursiveProvidedExpectedResultControl.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("provided member setup: "+diagnostic.message()) }
+    }
+    val owner = compiler.arena.firstFunctionNamed(nameId: compiler.internBytes(s: "reshape").nameId)
+    val declaration = compiler.arena.functionAt(index: owner)
+    val source = <SemanticCompletionOwner.Function index=owner />
+    if !compiler.sourceFacts.begin(owner: source) { panic("member boundary Source owner was not fresh") }
+    match compiler.recordParametricFunctionWithOrigin(fnIdx: owner, recordCallTemplates: true, origin: <SourceRecordingScope request=<SourceRecordOrigin.CheckingRequest session=compiler.sourceFactSession() root=source /> returnContext=<SourceExpectedContext.None /> />, expectedOrigin: <SourceExpectedContext.None />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("member Source recording: "+diagnostic.message()) }
+    }
+    compiler.cur.checkFn = owner
+    val traitIndex = compiler.decls.traitIndexByOffset(offset: declaration.provTraitOwner)
+    val trait = compiler.decls.traitAt(index: traitIndex)
+    mut val found = false
+    for expression in 0U64..<compiler.arena.exprs.count() {
+        match compiler.arena.exprs[expression] {
+            Expr.Method(recv: val receiver, val nameStart, val nameLen, val args) => {
+                if intern(c: inout compiler, start: nameStart, len: nameLen) == declaration.nameId {
+                    val receiverTerm = compiler.parametricExprTerm(exprId: receiver)
+                    if receiverTerm == 0U64 { panic("member argument did not retain its actual receiver") }
+                    val proof = compiler.staticTraitPatternProof(receiverRef: receiverTerm, traitId: trait.nameId, traitOwner: declaration.provTraitOwner, traitArgs: [], patternParams: <PatternBindInput.Values values=[] />).unwrap()
+                    val rank = compiler.providedMemberMatchRank(proof: proof, traitIndex: traitIndex, function: owner, args: args).unwrap()
+                    if rank != 2U64 { panic("provided member ranking re-inferred its fixed Self replacement") }
+                    found = true
+                }
+            }
+            _ => {}
+        }
+    }
+    if !found { panic("provided member boundary was not exercised") }
+}

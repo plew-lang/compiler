@@ -1,4 +1,41 @@
 // Original-node rigidity when a provided receiver contains a caller binder.
+impl Comp {
+    inout fn checkProvidedResultBoundary(callee: U64, caller: U64, expectedCaller: U64, accepted: Bool) {
+        val function = self.arena.functionAt(index: callee)
+        val owner = self.semanticBodyOwner(fnIdx: callee).unwrap()
+        val source = self.arena.functionAt(index: owner)
+        val binder = self.funcBindAt(binds: source.typeParams, index: 0U64)
+        val receiver = self.rebuildTypeTermChildren(ref: function.recvTy, children: [caller])
+        val expectedReceiver = self.rebuildTypeTermChildren(ref: function.recvTy, children: [expectedCaller])
+        self.cur.checkFn = owner
+        val environment = self.methodReceiverSignatureEnvironment(f: function, semanticReceiver: receiver).unwrap()
+        val pattern = self.providedExpectedResultPattern(callee: callee, receiver: receiver, proof: environment.proof).unwrap()
+        val result = self.arena.typeAt(index: pattern)
+        val scalar = self.langTypeRef(name: "Bool", args: [])
+        mut val fields: Array[U64] = []
+        for position in 0U64..<result.recordFieldLabels.count() {
+            if result.recordFieldLabels[position] == self.internBytes(s: "transform").nameId {
+                fields.append(self.groundTermInEnvironment(ref: result.recordFieldTerms[position], params: [binder], values: [scalar]))
+            } else { fields.append(expectedReceiver) }
+        }
+        val expected = self.rebuildRecordTypeTerm(t: result, fieldTerms: fields)
+        val initial = self.signatureTypeArguments(f: function, environment: environment)
+        val arguments = self.publishCallTemplateTypeArgs(args: initial)
+        val kind = <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.Term term=receiver /> args=<CallTemplateArgumentRange start=0U64 len=0U64 /> calleeTypeArgs=arguments proofId=self.freezeStaticConformanceProof(proof: environment.proof) />
+        val proposal = self.prepareCallTemplateResult(kind: kind, expectedTerm: expected, receiverTerm: receiver, offset: source.nameStart).unwrap()
+        if proposal.isNone() {
+            if accepted { panic("provided receiver replacement was re-inferred as a method binder") }
+        } else {
+            if !accepted { panic("mismatched fixed receiver was accepted") }
+            val completed = proposal.unwrap()
+            if !self.typeRefEq(a: completed.arguments[completed.arguments.count() - 1U64], b: scalar) || !self.typeRefEq(a: completed.result.resultType, b: expected) { panic("provided completion lost its rigid receiver or inferred method result") }
+        }
+        val unchanged = self.callTemplateTypeArgs(range: arguments)
+        for index in 0U64..<initial.count() {
+            if unchanged[index] != initial[index] { panic("result proposal mutated another candidate's retained arguments") }
+        }
+    }
+}
 fn main() {
     mut val compiler = <Comp />
     match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/RecursiveProvidedExpectedResult.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
@@ -12,29 +49,16 @@ fn main() {
         if function.nameId == name && function.isProvided {
             val owner = compiler.semanticBodyOwner(fnIdx: index).unwrap()
             val source = compiler.arena.functionAt(index: owner)
-            if source.typeParams.count() != 1U64 { panic("provided boundary source has unexpected binders") }
+            if source.typeParams.count() != 1U64 || function.typeParams.count() != 2U64 { panic("provided boundary source has unexpected binders") }
             val binder = compiler.funcBindAt(binds: source.typeParams, index: 0U64)
             val caller = compiler.pushType(t: <TypeRef nameStart=binder.nameStart nameLen=binder.nameLen nameId=binder.nameId paramId=binder.paramId args=[] />)
-            val receiver = compiler.rebuildTypeTermChildren(ref: function.recvTy, children: [caller])
-            compiler.cur.checkFn = owner
-            val environment = compiler.methodReceiverSignatureEnvironment(f: function, semanticReceiver: receiver).unwrap()
-            val pattern = compiler.providedExpectedResultPattern(callee: index, receiver: receiver, proof: environment.proof).unwrap()
-            val result = compiler.arena.typeAt(index: pattern)
-            val scalar = compiler.langTypeRef(name: "Bool", args: [])
-            mut val fields: Array[U64] = []
-            for position in 0U64..<result.recordFieldLabels.count() {
-                val field = result.recordFieldTerms[position]
-                if result.recordFieldLabels[position] == compiler.internBytes(s: "transform").nameId {
-                    fields.append(compiler.groundTermInEnvironment(ref: field, params: [binder], values: [scalar]))
-                } else { fields.append(receiver) }
-            }
-            val expected = compiler.rebuildRecordTypeTerm(t: result, fieldTerms: fields)
-            val arguments = compiler.publishCallTemplateTypeArgs(args: compiler.signatureTypeArguments(f: function, environment: environment))
-            val kind = <CallTemplateKind.Direct callee=index receiver=<CallTemplateReceiver.Term term=receiver /> args=<CallTemplateArgumentRange start=0U64 len=0U64 /> calleeTypeArgs=arguments proofId=compiler.freezeStaticConformanceProof(proof: environment.proof) />
-            val proposal = compiler.prepareCallTemplateResult(kind: kind, expectedTerm: expected, receiverTerm: receiver, offset: source.nameStart).unwrap()
-            if proposal.isNone() { panic("provided receiver replacement was re-inferred as a method binder") }
-            val completed = proposal.unwrap()
-            if !compiler.typeRefEq(a: completed.arguments[completed.arguments.count() - 1U64], b: scalar) || !compiler.typeRefEq(a: completed.result.resultType, b: expected) { panic("provided completion lost its rigid receiver or inferred method result") }
+            val separate = compiler.funcBindAt(binds: function.typeParams, index: 0U64)
+            val other = compiler.pushType(t: <TypeRef nameStart=separate.nameStart nameLen=separate.nameLen nameId=separate.nameId paramId=separate.paramId args=[] />)
+            if binder.paramId == separate.paramId { panic("noncollision control did not use a separate binder") }
+            compiler.checkProvidedResultBoundary(callee: index, caller: caller, expectedCaller: caller, accepted: true)
+            compiler.checkProvidedResultBoundary(callee: index, caller: caller, expectedCaller: other, accepted: false)
+            compiler.checkProvidedResultBoundary(callee: index, caller: other, expectedCaller: other, accepted: true)
+            compiler.checkProvidedResultBoundary(callee: index, caller: caller, expectedCaller: caller, accepted: true)
             found = true
         }
     }

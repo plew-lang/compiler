@@ -1,0 +1,11 @@
+trait Parent { type Item }
+struct Wrap[R] {}
+impl[R] Wrap[R] as Parent { type Item = R }
+impl[R] Wrap[R] {
+    fn inspect[U](owner: (fixed: Self, item: Array[Wrap[R]#Parent.Item]), transform: fn(value: U) -> U) -> (fixed: Self, transform: fn(value: U) -> U) {
+        val next = <Wrap[U] />
+        val result: (fixed: Wrap[U], transform: fn(value: Bool) -> Bool) = next.inspect(owner: (fixed: next, item: []), transform: fn(value) { return value })
+        return (fixed: owner.fixed, transform: transform)
+    }
+}
+fn main() {}

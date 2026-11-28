@@ -882,15 +882,23 @@ impl Comp {
         return <Result.Ok value=<AdmittedSignatureRoots terms=terms resultSelector=resultSelector /> />
     }
 
-    // Abstract and concrete bodies read the same exact admitted constructor
-    // recipe. Declaration evidence may remain symbolic; concrete reads must
-    // interpret its retained proofs in the explicit instance environment.
-    inout fn lexicalBodyParameterTypes(function: U64, receiver: U64) -> Result[Array[U64], CompileDiagnostic] {
-        val declaration = self.arena.functionAt(index: function)
+    // Call matching reads only the original declaration recipe. An actual
+    // receiver belongs to later explicit boundary preparation, never this API.
+    inout fn callableParameterPatterns(function: U64) -> Result[Array[U64], CompileDiagnostic] {
+        try self.checkAuthoredSignatureAdmissionOutcome()
+        val selected = self.arena.functionAt(index: function)
+        val owner = if selected.isProvided { give try self.semanticBodyOwner(fnIdx: function) } else { give function }
+        val declaration = self.arena.functionAt(index: owner)
+        val receiver = self.parametricSelfRef(f: declaration)
         mut val terms: Array[U64] = []
+        mut val associatedReady = false
         for index in 0U64..<declaration.params.count() {
             val parameter = self.funcParamAt(params: declaration.params, index: index)
-            val term = match (try self.lexicalBodyParameterType(function: function, index: index, ref: parameter.ty, receiver: receiver)) {
+            if !associatedReady && self.arena.typeContainsAssociatedProjection(ref: parameter.ty) {
+                if self.sourceTypeUses.signatureFor(function: owner).isSome() && !self.authoredSignatureViews.contains(key: owner) { try self.admittedSourceSignature(function: owner) }
+                associatedReady = true
+            }
+            val term = match (try self.lexicalBodyParameterType(function: owner, index: index, ref: parameter.ty, receiver: receiver)) {
                 Optional.Some(v: val retained) => retained
                 Optional.None => parameter.ty
             }
@@ -903,6 +911,8 @@ impl Comp {
         return self.lexicalBodySignatureType(function: function, slot: <SourceSignatureSlot.Parameter index=index />, ref: ref, receiver: receiver)
     }
 
+    // A body slot may request concrete interpretation; call patterns above
+    // instead supply the source declaration's own parametric receiver.
     inout fn lexicalBodySignatureType(function: U64, slot: SourceSignatureSlot, ref: U64, receiver: U64) -> Result[Optional[U64], CompileDiagnostic] {
         if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=<Optional.None /> /> }
         val selected = self.arena.functionAt(index: function)

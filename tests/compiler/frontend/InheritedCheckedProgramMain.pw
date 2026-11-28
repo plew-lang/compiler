@@ -37,6 +37,9 @@ fn checkProjectionProgram(path: String, accepted: Bool, expectedDiagnostic: Stri
 fn main() {
     mut val failures = ""
     for sample in [
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/RecursiveMixedProjection.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/RecursiveProvidedContainers.pw", accepted: true, diagnostic: ""),
+        (path: "tests/compiler/frontend/fixtures/ProjectionMembers/RecursiveProvidedMismatch.pw", accepted: false, diagnostic: ""),
         (path: "tests/compiler/frontend/fixtures/ProjectionMembers/RecursiveProvidedExpectedResultControl.pw", accepted: true, diagnostic: ""),
         (path: "tests/compiler/frontend/fixtures/ProjectionMembers/RecursiveProvidedExpectedResult.pw", accepted: true, diagnostic: ""),
         (path: "tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableStaticExpectedResultControl.pw", accepted: true, diagnostic: ""),

@@ -263,7 +263,7 @@ pub impl Comp {
     // One candidate-local forward type matcher for ordinary and requirement
     // calls. Entries normalize only their receiver/trait environment; this owner
     // keeps method inference transactional and checks the complete parameter.
-    inout fn callableParameterTypeMatchRank(function: Func, args: ArgRange, signatures: Array[U64], receiver: U64, initialValues: Array[U64]) -> Result[U64, CompileDiagnostic] {
+    inout fn callableParameterTypeMatchRank(function: Func, args: ArgRange, signatures: Array[U64], receiver: U64, initialValues: Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> Result[U64, CompileDiagnostic] {
         mut val values = initialValues
         mut val deferred: Array[(expression: U64, signature: U64)] = []
         for index in 0U64..<args.len {
@@ -271,7 +271,7 @@ pub impl Comp {
             if parameter >= signatures.count() { return <Result.Ok value=1U64 /> }
             val signature = signatures[parameter]
             val expression = self.argAt(args: args, index: index).expr
-            match (try self.matchPreparedCallArgument(expression: expression, signature: signature, parameters: function.typeParams, receiver: receiver, values: inout values)).matched {
+            match (try self.matchPreparedCallArgument(expression: expression, signature: signature, parameters: function.typeParams, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)).matched {
                 TypeArgumentMatch.Matched => {}
                 TypeArgumentMatch.Deferred => { deferred.append((expression: expression, signature: signature)) }
                 TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=1U64 /> }
@@ -280,7 +280,7 @@ pub impl Comp {
         // Only context-dependent operands are revisited. Independently typed
         // operands have already contributed their one candidate-local map.
         for context in deferred {
-            match (try self.matchPreparedCallArgument(expression: context.expression, signature: context.signature, parameters: function.typeParams, receiver: receiver, values: inout values)).matched {
+            match (try self.matchPreparedCallArgument(expression: context.expression, signature: context.signature, parameters: function.typeParams, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)).matched {
                 TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=1U64 /> }
                 _ => {}
             }
@@ -292,7 +292,7 @@ pub impl Comp {
     inout fn callableArgMatchRank(function: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         val declaration = self.arena.functionAt(index: function)
         if !self.paramsLabelsOk(params: declaration.params, args: args) { return <Result.Ok value=0U64 /> }
-        val signatures = try self.lexicalBodyParameterTypes(function: function, receiver: 0U64)
+        val signatures = try self.callableParameterPatterns(function: function)
         mut val values: Array[U64] = []
         while values.count() < declaration.typeParams.count() { values.append(0U64) }
         return self.callableParameterTypeMatchRank(function: declaration, args: args, signatures: signatures, receiver: 0U64, initialValues: values)
@@ -314,7 +314,8 @@ pub impl Comp {
         mut val receiver = self.lexicalCallReceiverTerm(receiverRef: recvRef)
         // Ranking can retain the equation of an omitted nominal qualifier.
         // This is candidate context, not a completed selected substitution.
-        if f.isAssoc && receiver != 0U64 && receiver < self.arena.typeCount() && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTermAt(index: receiver).args.len == 0U64 && self.arena.typeTermAt(index: f.recvTy).args.len != 0U64 && self.typeTermRefSameHead(a: receiver, b: f.recvTy) { receiver = f.recvTy }
+        val openNamespace = f.isAssoc && receiver != 0U64 && receiver < self.arena.typeCount() && f.recvTy != 0U64 && f.recvTy < self.arena.typeCount() && self.arena.typeTermAt(index: receiver).args.len == 0U64 && self.arena.typeTermAt(index: f.recvTy).args.len != 0U64 && self.typeTermRefSameHead(a: receiver, b: f.recvTy)
+        if openNamespace { receiver = f.recvTy }
         if receiver == 0U64 || receiver >= self.arena.typeCount() {
             return <Result.Ok value=(try self.callableArgMatchRank(function: callee, args: args)) />
         }
@@ -328,21 +329,41 @@ pub impl Comp {
         // by finalization too. This stage fixes only receiver binders;
         // the shared candidate-local matcher below tentatively infers the
         // method-owned binders before final selected-call publication.
-        val receiverEnvironment = try self.methodReceiverSignatureEnvironment(f: f, semanticReceiver: receiver)
+        mut val receiverEnvironment = try self.methodReceiverSignatureEnvironment(f: f, semanticReceiver: receiver)
         if receiverEnvironment.receiverRef == 0U64 { return <Result.Ok value=0U64 /> }
-        val calleeEnvironment = try self.knownMethodSignatureEnvironment(f: f, environment: receiverEnvironment)
-        mut val signatures = try self.lexicalBodyParameterTypes(function: callee, receiver: receiver)
-        val item = if signatures.count() == 0U64 { give 0U64 } else { give try self.finalMethodItemRef(f: f, receiverRef: receiver) }
-        mut val parameter = 0U64
-        while parameter < signatures.count() {
-            val pattern = signatures[parameter]
-            val grounded = try self.groundTermForBody(ref: pattern, environment: calleeEnvironment, selfRef: receiver, itemRef: item)
-            signatures.set(i: parameter, value: grounded)
-            parameter += 1U64
+        if openNamespace {
+            // These identity terms came from an omitted qualifier's candidate
+            // pattern, not an explicit caller type argument.
+            mut val arguments = receiverEnvironment.args
+            for index in 0U64..<receiverEnvironment.params.count() {
+                if index < arguments.count() && self.bareInferenceParamId(ref: arguments[index]) == receiverEnvironment.params[index].paramId { arguments.set(i: index, value: 0U64) }
+            }
+            receiverEnvironment = <InstanceEnvironment params=receiverEnvironment.params args=arguments receiverRef=receiverEnvironment.receiverRef proof=receiverEnvironment.proof constraints=receiverEnvironment.constraints />
         }
-        mut val values: Array[U64] = []
-        while values.count() < f.typeParams.count() { values.append(0U64) }
-        return self.callableParameterTypeMatchRank(function: f, args: args, signatures: signatures, receiver: receiver, initialValues: values)
+        val calleeEnvironment = try self.knownMethodSignatureEnvironment(f: f, environment: receiverEnvironment)
+        val signatures = try self.callableParameterPatterns(function: callee)
+        val item = if signatures.count() == 0U64 { give 0U64 } else { give try self.finalMethodItemRef(f: f, receiverRef: receiver) }
+        val values = self.signatureTypeArguments(f: f, environment: receiverEnvironment)
+        val prepared = try self.prepareCallParameterPatterns(patterns: signatures, environment: calleeEnvironment, parameters: f.typeParams, values: values, item: item)
+        return self.callableParameterTypeMatchRank(function: f, args: args, signatures: prepared.types, receiver: receiver, initialValues: values, rigidPatternTerms: prepared.boundaries)
+    }
+
+    // Closed values contain no caller binders, so their direct substitution
+    // needs no extra boundary allocation. Symbolic replacements stay atomic.
+    inout fn prepareCallParameterPatterns(patterns: Array[U64], environment: InstanceEnvironment, parameters: FuncBindRange, values: Array[U64], item: U64) -> Result[(types: Array[U64], boundaries: Optional[Dictionary[U64, U64]]), CompileDiagnostic] {
+        mut val symbolic = false
+        for term in environment.args { if !self.arena.typeIsClosed(ref: term) { symbolic = true break } }
+        mut val types = patterns
+        if symbolic {
+            mut val boundaries: Dictionary[U64, U64] = [:]
+            for pattern in patterns { try self.prepareCallPatternBoundaries(ref: pattern, environment: environment, parameters: parameters, values: values, rigidPatternTerms: inout boundaries) }
+            val retained: Optional[Dictionary[U64, U64]] = if boundaries.count() == 0U64 { give <Optional.None /> } else { give <Optional.Some v=boundaries /> }
+            return <Result.Ok value=(types: types, boundaries: retained) />
+        }
+        for index in 0U64..<types.count() {
+            types.set(i: index, value: (try self.groundTermForBody(ref: types[index], environment: environment, selfRef: environment.receiverRef, itemRef: item)))
+        }
+        return <Result.Ok value=(types: types, boundaries: <Optional.None />) />
     }
 
     // An argument that is an unsuffixed integer literal carries no type name, so it
@@ -760,7 +781,7 @@ impl Comp {
     // Compatibility can hold under a candidate expectation without an
     // independently determined source value. Carry that distinction through
     // the existing recipe walk; hasValue skips source-nonnormal branch exits.
-    inout fn matchPreparedArgumentBlock(blockId: U64, signature: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[(matched: TypeArgumentMatch, needsContext: Bool, hasValue: Bool), CompileDiagnostic] {
+    inout fn matchPreparedArgumentBlock(blockId: U64, signature: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> Result[(matched: TypeArgumentMatch, needsContext: Bool, hasValue: Bool), CompileDiagnostic] {
         match self.constructionValueBlock(blockId: blockId) {
             SemanticValueBlockTyping.Checked(completion: val completion, resultTerm: _) => {
                 if !completion.source.normal() { return <Result.Ok value=(matched: <TypeArgumentMatch.Matched />, needsContext: false, hasValue: false) /> }
@@ -773,16 +794,16 @@ impl Comp {
         // A raw normal block without a yield is diagnosed by its source owner.
         // Candidate probing must neither invent a value nor read the sentinel.
         if yielded >= self.arena.exprs.count() { return <Result.Ok value=(matched: <TypeArgumentMatch.Deferred />, needsContext: true, hasValue: true) /> }
-        return self.matchPreparedCallArgument(expression: yielded, signature: signature, parameters: parameters, receiver: receiver, values: inout values)
+        return self.matchPreparedCallArgument(expression: yielded, signature: signature, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
     }
 
     // A missing aggregate term is not a failed type comparison. Raw literals
     // expose only their authored shape; prepared children keep their saved facts.
     // Only the first array element can contribute an element inference frontier.
-    inout fn matchContextualArrayArgument(expression: U64, elements: ExprRange, signature: U64, expected: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[(matched: TypeArgumentMatch, needsContext: Bool, hasValue: Bool), CompileDiagnostic] {
+    inout fn matchContextualArrayArgument(expression: U64, elements: ExprRange, signature: U64, expected: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> Result[(matched: TypeArgumentMatch, needsContext: Bool, hasValue: Bool), CompileDiagnostic] {
         if self.callArgumentHasRootInferenceHole(expected: expected, parameters: parameters, values: values) {
             val actual = try self.inferenceArgumentType(exprId: expression)
-            if actual != 0U64 && self.sourceTypeHasCompleteArguments(ref: actual) { return <Result.Ok value=(matched: (try self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values)), needsContext: false, hasValue: true) /> }
+            if actual != 0U64 && self.sourceTypeHasCompleteArguments(ref: actual) { return <Result.Ok value=(matched: (try self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)), needsContext: false, hasValue: true) /> }
             return <Result.Ok value=(matched: <TypeArgumentMatch.Deferred />, needsContext: true, hasValue: true) />
         }
         if !self.isLangArrayType(ref: expected) { return <Result.Ok value=(matched: <TypeArgumentMatch.Mismatch />, needsContext: false, hasValue: true) /> }
@@ -793,7 +814,7 @@ impl Comp {
         mut val pending = elements.len == 0U64
         mut val needsContext = pending
         for index in 0U64..<elements.len {
-            val matched = try self.matchPreparedCallArgument(expression: self.exprAt(exprs: elements, index: index), signature: element, parameters: parameters, receiver: receiver, values: inout values)
+            val matched = try self.matchPreparedCallArgument(expression: self.exprAt(exprs: elements, index: index), signature: self.arena.typeArgumentAt(index: self.arena.typeTermAt(index: signature).args.start), parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
             if index == 0U64 { needsContext = matched.needsContext }
             match matched.matched {
                 TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> }
@@ -810,19 +831,19 @@ impl Comp {
 
     // Observe explicit closure slots without checking its body or publishing a
     // closure descriptor. Missing slots remain obligations of the chosen call.
-    inout fn matchContextualFunctionArgument(expression: U64, signature: U64, expected: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[(matched: TypeArgumentMatch, needsContext: Bool, hasValue: Bool), CompileDiagnostic] {
+    inout fn matchContextualFunctionArgument(expression: U64, signature: U64, expected: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> Result[(matched: TypeArgumentMatch, needsContext: Bool, hasValue: Bool), CompileDiagnostic] {
         val actual = (try self.exprType(id: expression)).ref
         if !self.isFnType(ref: actual) { return <Result.Ok value=(matched: <TypeArgumentMatch.Mismatch />, needsContext: false, hasValue: true) /> }
         if !self.isFnType(ref: expected) {
             if self.callArgumentHasInferenceHole(expected: expected, parameters: parameters, values: values) {
-                if self.sourceTypeHasCompleteArguments(ref: actual) { return <Result.Ok value=(matched: (try self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values)), needsContext: false, hasValue: true) /> }
+                if self.sourceTypeHasCompleteArguments(ref: actual) { return <Result.Ok value=(matched: (try self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)), needsContext: false, hasValue: true) /> }
                 return <Result.Ok value=(matched: <TypeArgumentMatch.Deferred />, needsContext: true, hasValue: true) />
             }
             return <Result.Ok value=(matched: <TypeArgumentMatch.Mismatch />, needsContext: false, hasValue: true) />
         }
-        val matched = self.matchCallTypeArguments(pattern: signature, argument: actual, params: parameters, values: inout values)
+        val matched = self.matchTypeArgumentConstraints(pattern: signature, argument: actual, params: <PatternBindInput.Function range=parameters />, values: inout values, rigidPatternTerms: rigidPatternTerms)
         match matched { TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=(matched: matched, needsContext: false, hasValue: true) /> } _ => {} }
-        val target = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+        val target = try self.interpretCallPattern(signature: signature, parameters: parameters, values: values, receiver: receiver, rigidPatternTerms: rigidPatternTerms)
         val source = self.arena.typeTermAt(index: actual)
         val context = self.arena.typeTermAt(index: target)
         // A bare callee binder already holding a symbolic function can defer
@@ -843,20 +864,72 @@ impl Comp {
         return <Result.Ok value=(matched: if pending { give <TypeArgumentMatch.Deferred /> } else { give matched }, needsContext: pending, hasValue: true) />
     }
 
-    inout fn matchPreparedCallArgument(expression: U64, signature: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[(matched: TypeArgumentMatch, needsContext: Bool, hasValue: Bool), CompileDiagnostic] {
-        mut val expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+    // Fixed replacements are caller types. Contextual syntax may be checked
+    // against them, but cannot infer any of the callee's binders inside them.
+    inout fn fixedCallPatternReplacement(signature: U64, parameters: FuncBindRange, values: Array[U64], receiver: U64, rigidPatternTerms: Optional[Dictionary[U64, U64]]) -> Result[Optional[U64], CompileDiagnostic] {
+        match rigidPatternTerms {
+            Optional.Some(v: val boundaries) => {
+                match boundaries.get(key: signature) {
+                    Optional.Some(v: val term) => { return <Result.Ok value=<Optional.Some v=term /> /> }
+                    Optional.None => {}
+                }
+            }
+            Optional.None => {}
+        }
+        if signature == 0U64 || signature >= self.arena.typeTermCount() { return <Result.Ok value=<Optional.None /> /> }
+        val term = self.arena.typeTermAt(index: signature)
+        if term.paramId != 0U64 && term.assocNameId == 0U64 {
+            for index in 0U64..<parameters.count() {
+                if index < values.count() && values[index] != 0U64 && self.funcBindAt(binds: parameters, index: index).paramId == term.paramId {
+                    return <Result.Ok value=<Optional.Some v=(try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)) /> />
+                }
+            }
+        }
+        return <Result.Ok value=<Optional.None /> />
+    }
+
+    inout fn interpretCallPattern(signature: U64, parameters: FuncBindRange, values: Array[U64], receiver: U64, rigidPatternTerms: Optional[Dictionary[U64, U64]]) -> Result[U64, CompileDiagnostic] {
+        if rigidPatternTerms.isNone() { return self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver) }
+        match (try self.fixedCallPatternReplacement(signature: signature, parameters: parameters, values: values, receiver: receiver, rigidPatternTerms: rigidPatternTerms)) {
+            Optional.Some(v: val term) => { return <Result.Ok value=term /> }
+            Optional.None => {}
+        }
+        if signature == 0U64 || signature >= self.arena.typeTermCount() { return <Result.Ok value=signature /> }
+        val count = self.typeTermRefChildCount(ref: signature)
+        if count == 0U64 { return self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver) }
+        mut val children: Array[U64] = []
+        for index in 0U64..<count {
+            children.append(try self.interpretCallPattern(signature: self.typeTermRefChildRef(ref: signature, index: index), parameters: parameters, values: values, receiver: receiver, rigidPatternTerms: rigidPatternTerms))
+        }
+        val term = self.rebuildTypeTermChildren(ref: signature, children: children)
+        if self.arena.typeTermAt(index: term).assocNameId != 0U64 {
+            if self.callArgumentHasInferenceHole(expected: signature, parameters: parameters, values: values) { return <Result.Ok value=term /> }
+            return self.closeBodyProjectionTerms(ref: term, environment: <InstanceEnvironment />, selfRef: 0U64, itemRef: 0U64, assumptions: self.functionBoundAssumptions(fnIdx: self.cur.checkFn))
+        }
+        return <Result.Ok value=term />
+    }
+
+    inout fn matchPreparedCallArgument(expression: U64, signature: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> Result[(matched: TypeArgumentMatch, needsContext: Bool, hasValue: Bool), CompileDiagnostic] {
+        match (try self.fixedCallPatternReplacement(signature: signature, parameters: parameters, values: values, receiver: receiver, rigidPatternTerms: rigidPatternTerms)) {
+            Optional.Some(v: val term) => {
+                mut val fixedValues: Array[U64] = []
+                return self.matchPreparedCallArgument(expression: expression, signature: term, parameters: <FuncBindRange start=0U64 len=0U64 />, receiver: 0U64, values: inout fixedValues)
+            }
+            Optional.None => {}
+        }
+        mut val expected = try self.interpretCallPattern(signature: signature, parameters: parameters, values: values, receiver: receiver, rigidPatternTerms: rigidPatternTerms)
         if expected == 0U64 || expected >= self.arena.typeCount() { return <Result.Ok value=(matched: <TypeArgumentMatch.Mismatch />, needsContext: false, hasValue: true) /> }
         val requiresContext = try self.argumentRequiresResultContext(exprId: expression)
         if requiresContext {
             match self.arena.exprs[expression] {
-                Expr.Block(val body, offset: _) | Expr.Sequence(val body) => { return self.matchPreparedArgumentBlock(blockId: body, signature: signature, parameters: parameters, receiver: receiver, values: inout values) }
+                Expr.Block(val body, offset: _) | Expr.Sequence(val body) => { return self.matchPreparedArgumentBlock(blockId: body, signature: signature, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms) }
                 Expr.IfChain(conditions: _, val thenBlk, val elseBlk) | Expr.IfExpr(cond: _, val thenBlk, val elseBlk) => {
-                    val first = try self.matchPreparedArgumentBlock(blockId: thenBlk, signature: signature, parameters: parameters, receiver: receiver, values: inout values)
+                    val first = try self.matchPreparedArgumentBlock(blockId: thenBlk, signature: signature, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
                     match first.matched { TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=first /> } _ => {} }
                     // Explicit information in the first normal value may filter
                     // candidates. Its missing context cannot come from a later arm.
                     if first.hasValue && first.needsContext { return <Result.Ok value=first /> }
-                    val second = try self.matchPreparedArgumentBlock(blockId: elseBlk, signature: signature, parameters: parameters, receiver: receiver, values: inout values)
+                    val second = try self.matchPreparedArgumentBlock(blockId: elseBlk, signature: signature, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
                     match second.matched { TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=second /> } _ => {} }
                     return <Result.Ok value=(matched: if (match first.matched { TypeArgumentMatch.Deferred => true _ => false }) || (match second.matched { TypeArgumentMatch.Deferred => true _ => false }) { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Matched /> }, needsContext: if first.hasValue { give first.needsContext } else { give second.needsContext }, hasValue: first.hasValue || second.hasValue) />
                 }
@@ -864,7 +937,7 @@ impl Comp {
                     mut val pending = false
                     mut val hasValue = false
                     for index in 0U64..<arms.len {
-                        val matched = try self.matchPreparedArgumentBlock(blockId: self.matchArmAt(arms: arms, index: index).body, signature: signature, parameters: parameters, receiver: receiver, values: inout values)
+                        val matched = try self.matchPreparedArgumentBlock(blockId: self.matchArmAt(arms: arms, index: index).body, signature: signature, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
                         match matched.matched {
                             TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> }
                             TypeArgumentMatch.Deferred => { pending = true }
@@ -887,17 +960,17 @@ impl Comp {
         if requiresContext {
             match self.arena.exprs[expression] {
                 Expr.Array(elems: val elements) => {
-                    return self.matchContextualArrayArgument(expression: expression, elements: elements, signature: signature, expected: expected, parameters: parameters, receiver: receiver, values: inout values)
+                    return self.matchContextualArrayArgument(expression: expression, elements: elements, signature: signature, expected: expected, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
                 }
                 Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _, isDiverging: _) => {
-                    return self.matchContextualFunctionArgument(expression: expression, signature: signature, expected: expected, parameters: parameters, receiver: receiver, values: inout values)
+                    return self.matchContextualFunctionArgument(expression: expression, signature: signature, expected: expected, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
                 }
                 Expr.Make(typeStart: _, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: val written, fields: val fields) => {
                     val structural = !isEnum && typeLen == 0U64 && !self.pendingConstructionContexts.contains(expression)
                     if structural || (try self.contextualConstructionArgument(exprId: expression)) {
                         if self.callArgumentHasRootInferenceHole(expected: expected, parameters: parameters, values: values) {
                             val actual = try self.inferenceArgumentType(exprId: expression)
-                            if actual != 0U64 && self.sourceTypeHasCompleteArguments(ref: actual) { return <Result.Ok value=(matched: (try self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values)), needsContext: false, hasValue: true) /> }
+                            if actual != 0U64 && self.sourceTypeHasCompleteArguments(ref: actual) { return <Result.Ok value=(matched: (try self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)), needsContext: false, hasValue: true) /> }
                             return <Result.Ok value=(matched: <TypeArgumentMatch.Deferred />, needsContext: true, hasValue: true) />
                         }
                         if structural && self.arena.typeTermAt(index: expected).hasTopLevelView() { return <Result.Ok value=(matched: <TypeArgumentMatch.Mismatch />, needsContext: false, hasValue: true) /> }
@@ -906,14 +979,14 @@ impl Comp {
                         mut val needsContext = if structural { give false } else { give self.preparedConstructionTermHasHoles(ref: (try self.inferenceArgumentType(exprId: expression))) }
                         for index in 0U64..<fields.len {
                             val field = self.makeFieldAt(fields: fields, index: index)
-                            val term = if isEnum { give (try self.genericEnumFieldType(instRef: expected, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen)).term } else { give try self.fieldTypeRefOfReceiver(receiverRef: expected, fieldStart: field.nameStart, fieldLen: field.nameLen) }
+                            val term = if isEnum { give (try self.genericEnumFieldType(instRef: signature, variantStart: variantStart, variantLen: variantLen, fieldStart: field.nameStart, fieldLen: field.nameLen)).term } else { give try self.fieldTypeRefOfReceiver(receiverRef: signature, fieldStart: field.nameStart, fieldLen: field.nameLen) }
                             if term == 0U64 { return <Result.Ok value=(matched: <TypeArgumentMatch.Mismatch />, needsContext: false, hasValue: true) /> }
-                            val matched = try self.matchPreparedCallArgument(expression: field.value, signature: term, parameters: parameters, receiver: receiver, values: inout values)
+                            val matched = try self.matchPreparedCallArgument(expression: field.value, signature: term, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
                             match matched.matched { TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> } _ => {} }
                             if structural { needsContext = needsContext || matched.needsContext }
                             pending = pending || (match matched.matched { TypeArgumentMatch.Deferred => true _ => false })
                         }
-                        val retained = try self.matchPreparedConstructionTerm(signature: signature, actual: self.semanticExprTerm(exprId: expression), parameters: parameters, receiver: receiver, values: inout values)
+                        val retained = try self.matchPreparedConstructionTerm(signature: signature, actual: self.semanticExprTerm(exprId: expression), parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
                         match retained {
                             TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=(matched: retained, needsContext: false, hasValue: true) /> }
                             TypeArgumentMatch.Deferred => { pending = true }
@@ -940,18 +1013,18 @@ impl Comp {
         if self.expressionNeedsTypeContext(exprId: expression) {
             return <Result.Ok value=(matched: if (try self.contextualArgumentMatchesType(exprId: expression, expected: expected)) { give <TypeArgumentMatch.Deferred /> } else { give <TypeArgumentMatch.Mismatch /> }, needsContext: true, hasValue: true) />
         }
-        return <Result.Ok value=(matched: (try self.matchPreparedArgumentTerm(signature: signature, actual: (try self.inferenceArgumentType(exprId: expression)), parameters: parameters, receiver: receiver, values: inout values)), needsContext: false, hasValue: true) />
+        return <Result.Ok value=(matched: (try self.matchPreparedArgumentTerm(signature: signature, actual: (try self.inferenceArgumentType(exprId: expression)), parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)), needsContext: false, hasValue: true) />
     }
 
-    inout fn matchPreparedArgumentTerm(signature: U64, actual: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
+    inout fn matchPreparedArgumentTerm(signature: U64, actual: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> Result[TypeArgumentMatch, CompileDiagnostic] {
         mut val candidate = values
-        val matched = self.matchCallTypeArguments(pattern: signature, argument: actual, params: parameters, values: inout candidate)
+        val matched = self.matchTypeArgumentConstraints(pattern: signature, argument: actual, params: <PatternBindInput.Function range=parameters />, values: inout candidate, rigidPatternTerms: rigidPatternTerms)
         match matched {
             TypeArgumentMatch.Matched | TypeArgumentMatch.Deferred => { values = candidate }
             TypeArgumentMatch.Mismatch => {}
             TypeArgumentMatch.Conflict => { return <Result.Ok value=<TypeArgumentMatch.Conflict /> /> }
         }
-        val expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+        val expected = try self.interpretCallPattern(signature: signature, parameters: parameters, values: values, receiver: receiver, rigidPatternTerms: rigidPatternTerms)
         // Projection equality can depend on another independent operand's
         // callee-owned slot. Keep that obligation until the common retry;
         // rigid caller parameters do not satisfy this predicate.
@@ -977,9 +1050,16 @@ impl Comp {
         return false
     }
 
-    inout fn matchPreparedConstructionTerm(signature: U64, actual: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64]) -> Result[TypeArgumentMatch, CompileDiagnostic] {
-        if !self.preparedConstructionTermHasHoles(ref: actual) { return self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values) }
-        val expected = try self.groundKnownCallTypeArguments(ref: signature, params: parameters, values: values, receiver: receiver)
+    inout fn matchPreparedConstructionTerm(signature: U64, actual: U64, parameters: FuncBindRange, receiver: U64, values: inout Array[U64], rigidPatternTerms: Optional[Dictionary[U64, U64]] = <Optional.None />) -> Result[TypeArgumentMatch, CompileDiagnostic] {
+        match (try self.fixedCallPatternReplacement(signature: signature, parameters: parameters, values: values, receiver: receiver, rigidPatternTerms: rigidPatternTerms)) {
+            Optional.Some(v: val term) => {
+                mut val fixedValues: Array[U64] = []
+                return self.matchPreparedConstructionTerm(signature: term, actual: actual, parameters: <FuncBindRange start=0U64 len=0U64 />, receiver: 0U64, values: inout fixedValues)
+            }
+            Optional.None => {}
+        }
+        if !self.preparedConstructionTermHasHoles(ref: actual) { return self.matchPreparedArgumentTerm(signature: signature, actual: actual, parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms) }
+        val expected = try self.interpretCallPattern(signature: signature, parameters: parameters, values: values, receiver: receiver, rigidPatternTerms: rigidPatternTerms)
         if actual == 0U64 || self.callArgumentHasRootInferenceHole(expected: expected, parameters: parameters, values: values) { return <Result.Ok value=<TypeArgumentMatch.Deferred /> /> }
         if !self.typeTermRefSameHead(a: actual, b: expected) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
         val count = self.typeTermRefChildCount(ref: actual)
@@ -987,7 +1067,7 @@ impl Comp {
         if count != self.typeTermRefChildCount(ref: expected) { return <Result.Ok value=<TypeArgumentMatch.Mismatch /> /> }
         mut val pending = false
         for index in 0U64..<count {
-            val matched = try self.matchPreparedConstructionTerm(signature: self.typeTermRefChildRef(ref: expected, index: index), actual: self.typeTermRefChildRef(ref: actual, index: index), parameters: parameters, receiver: receiver, values: inout values)
+            val matched = try self.matchPreparedConstructionTerm(signature: self.typeTermRefChildRef(ref: signature, index: index), actual: self.typeTermRefChildRef(ref: actual, index: index), parameters: parameters, receiver: receiver, values: inout values, rigidPatternTerms: rigidPatternTerms)
             match matched {
                 TypeArgumentMatch.Mismatch | TypeArgumentMatch.Conflict => { return <Result.Ok value=matched /> }
                 TypeArgumentMatch.Deferred => { pending = true }

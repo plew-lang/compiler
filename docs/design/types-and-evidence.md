@@ -51,12 +51,22 @@ Substitution takes a term and an explicit mapping from lexical parameter identit
 
 Apply a parameter map simultaneously: a replacement belongs to the caller's environment and is not recursively subjected to the same map. For a recursive generic call whose replacement is `T -> Box[T]`, substituting one occurrence of the callee parameter produces `Box[T]`, not an unbounded sequence of nested boxes. Resolving a remaining projection inside that replacement is a separate evidence-driven operation; it does not reapply the original parameter map.
 
-Expected-result inference retains the original declaration pattern and the
-boundaries of known replacements. A known replacement is compared as a rigid
+Argument applicability, argument inference and expected-result inference retain
+the original admitted declaration pattern and the boundaries of known replacements.
+Their shared pattern context includes fixed receiver, implementation and lexical
+`Self` bindings as well as known callable arguments. A known replacement is compared as a rigid
 whole; its caller-owned children never become inference variables of the callee,
 even in a recursive call that shares ParamIds. Only unresolved declaration
 binders may be completed. Projection comparison consumes the saved declaring
 selection and known substitution without inferring its receiver from its output.
+Contextual blocks, aggregates and function literals retain these same boundaries;
+checking a fixed type supplies no callee inference variables inside that type.
+A projection that still depends on an unresolved callee binder remains a pending
+obligation, rather than a fixed replacement captured before later operands.
+Identity placeholders introduced for an omitted qualifier are unresolved slots,
+not evidence of explicit receiver arguments. Closed replacements contain no
+caller inference binders, so equivalent direct interpretation may omit boundary
+storage; empty contexts need no unconditional boundary allocation.
 Admitted signature readers return terms already interpreted in their explicit
 environment. Argument-context, result-publication and checking consumers do not
 apply that same environment again. Any remaining projection closure is a

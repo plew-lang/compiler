@@ -229,7 +229,7 @@ pub impl Comp {
     inout fn groundFinalMethodReturn(callee: U64, receiver: U64, args: ArgRange) -> Result[U64, CompileDiagnostic] {
         if receiver == 0U64 { return <Result.Ok value=0U64 /> }
         val function = self.arena.functionAt(index: callee)
-        val patterns: Array[U64] = if function.typeParams.count() == 0U64 { give [] } else { give try self.lexicalBodyParameterTypes(function: callee, receiver: receiver) }
+        val patterns: Array[U64] = if function.typeParams.count() == 0U64 { give [] } else { give try self.callableParameterPatterns(function: callee) }
         val environment = try self.finalMethodEnvironmentWithOrigin(f: function, receiverRef: receiver, args: args, parameterTypes: patterns, inferenceOrigin: <GenericCallInferenceOrigin.Raw />)
         return self.selectedMethodResult(callee: callee, environment: environment)
     }
@@ -255,7 +255,7 @@ impl Comp {
     // and the signature saved by Record.
     inout fn staticProvidedCallEnvironment(callee: U64, proof: StaticConformanceProof, receiverTerm: U64, args: ArgRange, retainedArguments: Array[U64] = [], inferenceOrigin: GenericCallInferenceOrigin = <GenericCallInferenceOrigin.Raw />) -> Result[InstanceEnvironment, CompileDiagnostic] {
         val function = self.arena.functionAt(index: callee)
-        val patterns: Array[U64] = if function.typeParams.count() == 0U64 { give [] } else { give try self.lexicalBodyParameterTypes(function: callee, receiver: receiverTerm) }
+        val patterns: Array[U64] = if function.typeParams.count() == 0U64 { give [] } else { give try self.callableParameterPatterns(function: callee) }
         val inferred = try self.inferMethodEnvironmentWithOrigin(f: function, receiverRef: receiverTerm, args: args, parameterTypes: patterns, selectedProof: proof, retainedArguments: retainedArguments, inferenceOrigin: inferenceOrigin)
         return self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment params=inferred.params args=inferred.args receiverRef=receiverTerm proof=proof />)
     }
@@ -1448,11 +1448,10 @@ impl Comp {
             val item = try self.finalMethodItemRef(f: f, receiverRef: semanticReceiver)
             mut val types: Array[U64] = []
             for index in 0U64..<f.params.count() {
-                types.append(try self.groundTermForBody(ref: (if parameterTypes.count() != 0U64 { give parameterTypes[index] } else { give self.funcParamAt(params: f.params, index: index).ty }), environment: known, selfRef: semanticReceiver, itemRef: item))
+                types.append(if parameterTypes.count() != 0U64 { give parameterTypes[index] } else { give self.funcParamAt(params: f.params, index: index).ty })
             }
-            // Signature Self/projections are already interpreted. A second
-            // receiver substitution could change a caller-owned symbolic Self.
-            fullArgs = try self.inferPreparedCallTypeArguments(f: f, args: args, parameterTypes: types, initialValues: fullArgs, inferenceOrigin: inferenceOrigin)
+            val prepared = try self.prepareCallParameterPatterns(patterns: types, environment: known, parameters: f.typeParams, values: fullArgs, item: item)
+            fullArgs = try self.inferPreparedCallTypeArguments(f: f, args: args, parameterTypes: prepared.types, selfRef: semanticReceiver, initialValues: fullArgs, inferenceOrigin: inferenceOrigin, rigidPatternTerms: prepared.boundaries)
         }
         // This is a declaration-time semantic query as well as a concrete
         // codegen query.  A receiver such as `Box[T_outer]` supplies a fully

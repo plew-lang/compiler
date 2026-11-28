@@ -1,3 +1,4 @@
+// Diagnostic regression for the rejected memo prototype; not a product gate.
 // Native-only counter hook observes interpretation, not lookup or type IDs.
 fn main() {
     mut val compiler = <Comp />
