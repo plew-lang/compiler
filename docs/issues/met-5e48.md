@@ -1,6 +1,6 @@
 ---
 id: met-5e48
-status: in_progress
+status: open
 deps: []
 links: []
 created: 2026-11-28T15:39:46Z
@@ -12,23 +12,20 @@ tags: [mid, performance]
 ---
 # Measure and eliminate repeated draft statement prefix copies
 
+## Guarantee and scope
 
-## Guarantee and sequence
+This task is **not complete**. Eliminate redundant draft statement-prefix copies while preserving bounds/closed-block no-op, statement order/payload, terminators, sibling blocks and external CoW snapshots. No canonical storage change, compiler-only ARC exemption, check bypass or selected-call semantic change is delegated. [Mid storage](../design/mid.md#draft-construction-and-canonical-storage) permits owned temporary arrays; the general indexed access meaning remains spec03.
 
-Measure midAppendStatement's draft mutation protocol before repair. Current code retains a MidBlock, copies its statements Array, appends while the old array remains held, then replaces the block. Post-Array native assembly gf7393 retains the old statement buffer before Array.append and drops the retained old MidBlock afterwards. MidBlock destructor pwdrop894 is present in the sampled Mid-building window. Confirm physical CoW copy count/elements/bytes with a private scoped runtime probe; do not infer time from O0 counts.
+## Confirmed evidence and rejected prototype
 
-If confirmed, append through the existing draft place rather than retaining/replacing its whole prefix. Preserve out-of-range no-op, closed-block no-op, statement order and payload, terminator identity, other blocks, and external CoW snapshots. No change to canonical storage, ownership semantics, Array runtime/LLVM product code, checks or source admission. Behavior-fixed before/after controls must explicitly retain outer and inner snapshots. Enumerate actual helper callers; verify targeted statement/CFG controls and same-source LLVM/time. Independent boundary/source/test/performance review, final related whole gate shared with pending performance changes. Do not close stage3/parent/whole gate from this finite repair.
+[Evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/projection-members/performance-recovery/draft-append/): scoped private runtime probes measure381605 appends;256782 shared reallocations copy755249 elements/138965816bytes, max prefix59. The direct nested-place prototype d6a1136d changes draft statements to mut val and avoids explicit prefix replacement, but copies stay identical while prepare checks double. These are O0 counts, not optimized-time predictions. Target/declared std/manifest/lock input fingerprints and identical LLVM are retained; product runtime/LLVM were not patched.
 
-Design: mid.md Draft Construction permits owned temporary arrays; it does not require repeated prefix replacement. Excludes pooled canonical transforms, branch algorithms, deinit timing changes and generic Array/ARC redesign.
+Private behavior controls passed before/after, including explicit current/sibling Open, outer/inner/other-block snapshots, payload/order and bounds. Three existing continuation/value CFG programs passed with identical LLVM. Ordinary functions necessarily traverse Mid/Program→templates→buildParametricMidBody and Backend/Llvm/Any Ready→genLlvmPreparedMidBody; no AST fallback. Optimized prototype build/own-source smoke passed, but five same-source pairs observed7.759354→7.910669s (all10LLVM equal/input unchanged). Stable universal slowdown is not claimed; the experiment did not remove its target cost.
 
-## Boundary decision and before controls
+Prototype product changes were rejected and restored to f967a9fa; all src hashes match the retained ac8 snapshot. Tests/runner/harness registration are retained and the restored root unit probe passed. Candidate ac8 remains the latest finite-adopted source; final related whole gate and formal7s are not certified.
 
-Independent boundary review confirms only draft MidBlock.statements needs mut val, matching ordinary place composition (spec03). Terminator stays val and canonical MidBlockNode/ranges unchanged. Direct nested-place append must follow bounds/open guards with no retained prefix temporary. No language/architecture decision is introduced.
+## Mechanism and required replanning
 
-Private runtime scope around append measured381605 prepares/queries,256782 shared-buffer reallocation events,755249 copied elements/138965816 bytes (max prefix59), no explicit-copy calls and scope inactive at exit. O0 probe, not an elapsed-time claim; native target/declared std/manifest/lock pre/post fingerprints unchanged and target LLVM equals preceding counter-free-equivalent output. The C hooks are diagnostic only; product runtime/LLVM were not changed.
+Independent review corrects the original endpoint assumption: direct source place spelling is not physical in-place mutation. Spec03's indexed mutation model is getter→owned temporary→modify→setter. Build.midTemplateInoutCallArgument routes Field-of-Index through Access; Access's getter writes valueLocal, its setter consumes the changed place, then cleanup drops it. The original slot is not emptied and can keep the inner backing shared. Source and counts support this mechanism; they do not prove every retain has only this cause.
 
-MidStatementAppendMain/test-mid-statement-append baseline and modified native probes passed. Controls retain real outer/inner snapshots and other-block aliases, verify statement/place projection payload/order, empty/bounds/closed3kinds and terminator identity; additional direct Open checks are being repeated before/after. Review found no product source correction required. Existing all_diverge/evaluation_boundaries ordinary functions necessarily traverse prepareCanonicalForLlvm→Ready→genLlvmPreparedMidBody (Backend/Llvm/Any, no AST fallback) and Mid/Program→templates→buildParametricMidBody. Their baseline native execution and mid_if_all_diverge passed. After fresh candidate plus copy/time validation remain pending.
-
-## Counter result of local prototype
-
-Direct append preserves all private before/after controls (now including explicit Open and outer terminator checks), but the physical counter is unchanged:256782 shared reallocations/138965816 bytes, while prepare checks double381605→763210. Target LLVM identical. [evidence](../../../evidence/rejection-domains/diagnostic-domain-implementation/projection-members/performance-recovery/draft-append/). No copy-elimination completion claim. Spec03's indexed nested get-modify-set model explains a remaining temporary ownership path through Access; removing that requires its own stability/effect proof rather than bypassing selection/checks. Optimized timing is pending before prototype adoption/rejection.
+The active goal's task-plan-error stop condition applies: the proposed local endpoint was insufficient. Before implementation resumes, replan the general Access/ownership optimization boundary and its controls. Proven physical mutation must preserve one-owner backing, no invalidating reentry, nonoverlap, selected getter/setter effects, evaluation order, writeback and external snapshots. Do not substitute compiler-specific ARC suppression or take/clear workarounds. No language specification change has been decided or shown necessary. Keep the finite follow-up owned here until the new scope is agreed; do not close by merely assigning it elsewhere.

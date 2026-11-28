@@ -779,12 +779,17 @@ fn midTemplateInoutCallArgument(c: inout Comp, state: inout MidBuildState, argum
 
 fn midAppendStatement(state: inout MidBuildState, statement: MidStatement) {
     if state.currentBlock >= state.blocks.count() { return }
-    // Inspect the edge before modifying its statement place. A diverging
-    // child has closed this path; its parent must not append another step.
-    // The inspection temporary ends here, so it does not retain the prefix
-    // across append. Real external snapshots retain ordinary CoW protection.
-    if !midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) { return }
-    state.blocks[state.currentBlock].statements.append(statement)
+    val current: MidBlock = state.blocks[state.currentBlock]
+    // A nested value expression may terminate the current source path (for
+    // example, a value match whose every arm returns). Its enclosing source
+    // expression has no continuation on that path, so it must not append an
+    // operation after the terminator just because it has a syntactic result
+    // type. The caller will observe the closed block and stop building the
+    // enclosing statement.
+    if !midTerminatorIsOpen(terminator: current.terminator) { return }
+    mut val statements: Array[MidStatement] = current.statements
+    statements.append(statement)
+    state.blocks.set(i: state.currentBlock, value: <MidBlock statements=statements terminator=current.terminator />)
 }
 
 fn midSetTerminator(state: inout MidBuildState, terminator: MidTerminator) {
