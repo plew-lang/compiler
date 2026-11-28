@@ -301,15 +301,15 @@ impl MidBuildState {
 
 // Owner equality is established once at source-state construction. Public
 // consumers still check session reuse and the exact retained statement row.
-fn midSourceStateAdmitted(c: Comp, state: MidBuildState) -> Bool {
-    match state.sourceFacts {
-        Optional.Some(v: val facts) => { return facts.belongsToSession(session: c.sourceFactSession()) }
+fn midSourceStateAdmitted(session: U64, facts: Optional[PreparedSemanticFacts]) -> Bool {
+    match facts {
+        Optional.Some(v: val facts) => { return facts.belongsToSession(session: session) }
         Optional.None => { return false }
     }
 }
-fn midSourceStatementAdmitted(c: Comp, state: MidBuildState, stmtId: U64) -> Bool {
-    if !midSourceStateAdmitted(c: c, state: state) { return false }
-    match state.sourceFacts {
+fn midSourceStatementAdmitted(session: U64, facts: Optional[PreparedSemanticFacts], stmtId: U64) -> Bool {
+    if !midSourceStateAdmitted(session: session, facts: facts) { return false }
+    match facts {
         Optional.Some(v: val facts) => { return facts.statementCompletion(stmtId: stmtId).isSome() }
         Optional.None => { return false }
     }
@@ -438,7 +438,7 @@ pub fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> MidBi
 // separate typed address root, never a synthetic local. No source spelling,
 // scope scan, or AST pattern match is permitted here.
 pub fn midPlaceForRecordedIdent(c: inout Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
-    if !midSourceStateAdmitted(c: c, state: state) { return <MidPlaceLookup /> }
+    if !midSourceStateAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts) { return <MidPlaceLookup /> }
     val facts = match state.sourceFacts { Optional.Some(v: val facts) => facts Optional.None => { return <MidPlaceLookup /> } }
     val target = match facts.identifierTarget(exprId: exprId) { Optional.Some(v: val target) => target Optional.None => { return <MidPlaceLookup /> } }
     val local: MidBindingLookup = midLocalForBinding(state: state, declarationTarget: target)
@@ -2584,7 +2584,7 @@ fn midInitializeBinding(state: inout MidBuildState, destination: MidPlace, value
 }
 
 pub fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64, completeEvaluation: Bool = true) -> MidBuildError {
-    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    if !midSourceStatementAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
     return buildMidLetAdmitted(c: inout c, state: inout state, stmtId: stmtId, completeEvaluation: completeEvaluation)
 }
 
@@ -2789,7 +2789,7 @@ fn midRecordedStorageValueType(c: inout Comp, facts: PreparedSemanticFacts, func
 // in Mid. Index paths deliberately remain SemanticAccess work: treating one
 // as a raw store here would bypass its getter/setter/writeback and CoW proof.
 pub fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
-    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    if !midSourceStatementAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
     return buildMidAssignAdmitted(c: inout c, state: inout state, stmtId: stmtId)
 }
 
@@ -2861,7 +2861,7 @@ fn midReturnOperand(c: inout Comp, operand: MidOperand, typeTerm: U64) -> MidOpe
 }
 
 pub fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
-    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    if !midSourceStatementAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
     return buildMidReturnAdmitted(c: inout c, state: inout state, stmtId: stmtId)
 }
 
@@ -2942,7 +2942,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
             state.aggregateValues = []
         }
         val stmtId: U64 = c.arena.blockStmtPool[range.start + i]
-        if checkedRange.isNone() && !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+        if checkedRange.isNone() && !midSourceStatementAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
         match c.arena.stmts[stmtId] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _, annotationOccurrence: _) => {
                 result = buildMidLetAdmitted(c: inout c, state: inout state, stmtId: stmtId, completeEvaluation: !expressionSequence)
@@ -3071,7 +3071,7 @@ fn buildMidBlockInto(c: inout Comp, state: inout MidBuildState, blockId: U64, bl
 }
 
 pub fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64) -> MidBuildError {
-    if !midSourceStateAdmitted(c: c, state: state) { return <MidBuildError.MissingSemanticType /> }
+    if !midSourceStateAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts) { return <MidBuildError.MissingSemanticType /> }
     return buildMidBlockInto(c: inout c, state: inout state, blockId: blockId, blockResult: <MidBlockResult.Forbidden />)
 }
 
@@ -3461,7 +3461,7 @@ fn buildMidPatternMatch(c: inout Comp, state: inout MidBuildState, matchSource: 
 }
 
 pub fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
-    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    if !midSourceStatementAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
     return buildMidMatchAdmitted(c: inout c, state: inout state, stmtId: stmtId)
 }
 
@@ -3578,7 +3578,7 @@ fn buildMidIfCfg(c: inout Comp, state: inout MidBuildState, cond: U64, thenBlk: 
 // is no conditional-move special case: a Move emitted by `buildMidLet` in one
 // branch reaches the join through the same CFG used by every other statement.
 pub fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
-    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    if !midSourceStatementAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
     return buildMidIfAdmitted(c: inout c, state: inout state, stmtId: stmtId)
 }
 
@@ -3602,7 +3602,7 @@ fn buildMidIfAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
 // `break` and `continue` use the lexical loop-target stack to emit every
 // intervening ScopeExit before branching.
 pub fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
-    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    if !midSourceStatementAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
     return buildMidWhileAdmitted(c: inout c, state: inout state, stmtId: stmtId)
 }
 
@@ -3652,7 +3652,7 @@ fn buildMidWhileAdmitted(c: inout Comp, state: inout MidBuildState, stmtId: U64)
 // Both false-next and break converge after iteration cleanup, while continue
 // returns to the next call without releasing the iterator itself.
 pub fn buildMidFor(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
-    if !midSourceStatementAdmitted(c: c, state: state, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
+    if !midSourceStatementAdmitted(session: c.sourceFactSession(), facts: state.sourceFacts, stmtId: stmtId) { return <MidBuildError.MissingSemanticType /> }
     return buildMidForAdmitted(c: inout c, state: inout state, stmtId: stmtId)
 }
 
