@@ -1,7 +1,7 @@
 ---
 id: met-wxn1
 status: in_progress
-deps: [met-4dxy, met-y2ec, met-k93s]
+deps: [met-4dxy, met-y2ec, met-k93s, met-6qyz]
 links: []
 created: 2026-11-27T15:58:48Z
 type: task
@@ -458,105 +458,32 @@ recursive Source fixture is being checked before finalizing that representation.
 The isolated canonical-readers build uses an earlier frozen source, not these
 later Generic/provided changes; do not confuse it with a final candidate.
 
-## Performance recovery priority
+## Performance recovery boundary
 
-Normal implementation is suspended until the self-host median is at most 7.5s.
-The frozen current-source candidate reached a generation-2 fixed point in
-`20261128T041820-self-host-1997cd`; samples are 8.760432, 8.216416 and
-8.293744s, median 8.293744s. This candidate-start diagnostic is not promotion
-of the adopted carrier. Evidence: meta
-`evidence/rejection-domains/diagnostic-domain-implementation/projection-members/performance-recovery/`.
-The closed-term early-return experiment built successfully, but alternating
-three pairs gave 8.171744s before versus 8.212380s after, all LLVM outputs equal.
-It is not adopted. Source review additionally found malformed unknown-closedness
-input and raw view normalization risks.
+Ordinary met-y2ec/Source implementation remains suspended until formal
+self-host <=7.5s recovery. The latest frozen source reached a G2 fixed point
+with candidate-start diagnostic median8.293744s; no adopted carrier promotion.
+Header0863e52b, scope/receivera45cba5e and leaf-memoe36e82f8 are limited
+improvements with controls/review. Other bounded experiments did not show
+sufficient recovery; details stay in the meta performance-recovery evidence.
 
-Authorized CPU sample (2–5s interval) and exact frozen-symbol mapping are in
-meta scratch `tmp/performance-recovery-current/cpu-profile-authorized` and
-`symbols.json`; baseline profile input and source are fixed. Declaration
-completion and Mid construction appear in that interval; this is not a
-whole-run attribution or exact percentage claim.
+Recipe-header reading uses admitted producer contracts: direct Raw projections
+without stored receivers are outside this source recipe contract; normal
+Comp.pushType producers normalize that representation. Diagnostic integer keys
+are not reuse authority. No process-global or cross-arena success cache is
+authorized by repetition counts.
 
-The lazy parametric-receiver experiment also showed no material recovery
-(8.095831s before / 8.114948s after) and is not adopted.
+Current absolute-cost investigation met-6qyz supersedes the assumption that
+regression deltas exhaust optimization candidates. Trace-only median8.084576s:
+declaration2.742s, body/finalization/executable preparation collectively2.544s,
+LLVM generation/printing1.179s. O0 counting identifies8194 repeat ownership
+analysis requests on37558 canonical IDs; met-b775 owns a bounded experiment
+retaining actual successful analysis under the existing request owner.
+met-hw4n owns exact publication/reread cost investigation. Neither is already
+implemented or a promise to reach7.5s. Counters use LLVM22 vs measuredLLVM20;
+use them for source work counts, not timing.
 
-On the same latest source, adopted149aac and the current candidate give
-7.437584s and 8.048875s respectively (three alternating pairs). The major
-phase difference is function/declaration checking before declaration Mid
-construction. Removing only receiver-term IDs in generated method symbol
-names yields zero differing LLVM lines for the first pair, not raw equality.
-
-Recipe-header optimization0863e52b changes TypeRef materialization to the
-existing TypeTerm reader without removing admission, slot or proof checks.
-Build20261128T050405-build-284e87 passed. Warm alternating pairs give
-8.117768s / 8.069929s, all LLVM equal and inputs unchanged. Independent review
-plus native admission controls and 24 associated/selection/reader profiles
-pass. Detailed evidence is under the meta performance-recovery directory.
-The source-level recipe contract excludes direct Raw Arena projections lacking
-a stored receiver; normal Comp.pushType producers normalize that representation.
-
-The 7.5s cap remains unmet, ordinary implementation remains suspended, and no
-hard-to-repair judgment has been made. Diagnostic O0 checking counts241858 reader entries and38060 distinct specified
-structural keys; see meta performance-recovery/signature-read-counts.json. Counts
-do not establish a complete cache key or a speedup.
-
-An isolated structural-only success memo passed key/CoW/session controls but did
-not improve warm runtime (8.149641 -> 8.179752 seconds); it is not adopted.
-Diagnostic counters: 241809 eligible reads, 203765 hits, maximum bucket size2.
-
-A narrower scope-presence Bool query and identity receiver shortcut preserve the
-original validation fallback. Baseline targeted counter RED, candidate GREEN;
-presence controls and all24 component profiles pass with unchanged inputs.
-Independent review found no mandatory correction. Warm alternating three-pair
-medians 8.079642 -> 8.012548 seconds, all six LLVM hashes identical. The limited
-improvement is adopted; formal <=7.5 recovery remains unmet. Ordinary type
-checking work stays suspended. Next investigate residual declaration-checking
-cost, without adopting the result memo or promoting bin/seed.
-
-Complete SourceParameters vector forwarding passed build/native24/source review
-but warm medians 8.025435 -> 8.077316 seconds showed no gain (LLVM identical).
-Not adopted. Next isolate temporary memo administration for nonrecursive leaf
-recipes; preserve every proof, environment and malformed-input boundary.
-
-Authored leaf memo administration: preserve complete interpretation but omit
-final memo entries for leaves with no children/sourceRecipe/projection/views.
-Build and native24 passed; independent source review found no mandatory issue.
-Warm medians 8.072792 -> 8.011871 seconds, all LLVM identical. Limited adoption;
-not formal recovery. Next count reader modes by declaration phases, retaining
-all checks. No method/result work or carrier/seed promotion is resumed.
-
-## Performance recovery stop boundary
-
-Ordinary met-y2ec/Source work remains suspended until formal <=7.5s recovery.
-The header/scope/leaf changes yield only limited improvements. Closed grounding,
-lazy receiver preparation, structural result memo, vector forwarding and
-identity-write experiments did not demonstrate sufficient recovery.
-
-Latest finite old/current same-target coarse-phase diagnostic: instrumented
-wall medians7.519873/8.091147s. Added exclusive Record0.250s, Generic0.001s,
-Verify0.132s, Rest0.060s, outside0.129s. All receiver-number-normalized LLVM
-equal, inputs unchanged. Separate inclusive retained-signature reads~0.356s
-include mandatory first reads and observer effects; do not sum them with phase
-deltas or treat them as entirely removable. No formal recovery is claimed.
-
-Engineering judgment, independently reviewed: no currently identified local
-repair supports <=7.5 recovery; broader multi-phase investigation/repair is
-needed before resuming. This is not proof that a large change is technically
-inevitable, nor evidence selecting a cache architecture. All handles collected.
-
-On explicitly authorized resumption, attribute added signature interpretation,
-construction receipt and fixed-replacement work within Record/Verify/Rest, and
-explain outside-phase cost. Separate necessary semantics from recalculation.
-If transfer of checked results is justified, preserve exact selection revision,
-readiness, source owner/scope/session, environment/proof and fact lifetime across
-consumers. Do not silently use scalar diagnostic keys as reuse authority.
-
-Source-reviewed small opportunities remain unproven recovery candidates: empty
-argument signature reads in Verify/Generic (12347/62); duplicate projection
-presence queries in callableParameterPatterns; repeated construction-head
-occurrence/use extraction. Preserve admission and current-expression checks;
-do not try them sequentially without measured contribution.
-
-Evidence and final independent assessment: meta projection-members/
-performance-recovery/{declaration-phase-*,recovery-decision-review.md}.
-Pending feature work is preserved as WIP, not completed or promoted.
+The prior engineering stop assessment did not prove large changes unavoidable.
+Continue from evidence in meta performance-recovery/current-costs, preserving
+all verifier/evidence, fixed input, failure and lifetime boundaries. Stage3
+WIP remains b669e60e and unclosed; no main/bin/seed promotion.
