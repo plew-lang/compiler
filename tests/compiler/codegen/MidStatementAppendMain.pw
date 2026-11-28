@@ -1,0 +1,49 @@
+// Injected into Mid/Build: test the private draft append protocol.
+fn main() {
+    mut val state = <MidBuildState.initial sourceFunction=99U64 />
+    state.blocks = []
+    midAppendStatement(state: inout state, statement: <MidStatement.Nop />)
+    if state.blocks.count() != 0U64 { panic("empty builder changed") }
+    val place = <MidPlace local=19U64 typeTerm=17U64 projections=[<MidProjection.Field index=3U64 typeTerm=17U64 isBoxed=false />] />
+    val assignment = <MidStatement.Assign destination=place value=<MidRvalue.Use operand=<MidOperand.Copy place=place /> /> />
+    state.blocks = [<MidBlock />, <MidBlock terminator=<MidTerminator.Unreachable /> />]
+    for index in [2U64, 3U64] {
+        state.currentBlock = index
+        midAppendStatement(state: inout state, statement: assignment)
+        if state.blocks[0U64].statements.count() != 0U64 { panic("out of range appended") }
+    }
+    state.currentBlock = 0U64
+    midAppendStatement(state: inout state, statement: assignment)
+    val outer = state.blocks
+    val inner = state.blocks[0U64].statements
+    // Both blocks and both snapshots initially share the statement payload.
+    state.blocks.set(i: 1U64, value: <MidBlock statements=inner />)
+    midAppendStatement(state: inout state, statement: <MidStatement.Nop />)
+    mut val index = 0U64
+    while index < 32U64 {
+        midAppendStatement(state: inout state, statement: <MidStatement.Nop />)
+        index += 1U64
+    }
+    if state.blocks[0U64].statements.count() != 34U64 || outer[0U64].statements.count() != 1U64 || inner.count() != 1U64 || state.blocks[1U64].statements.count() != 1U64 { panic("append broke CoW snapshots") }
+    match state.blocks[0U64].statements[0U64] {
+        MidStatement.Assign(destination: val destination, value: val value) => {
+            if destination.local != 19U64 || destination.typeTerm != 17U64 || destination.projections.count() != 1U64 { panic("destination changed") }
+            match destination.projections[0U64] { MidProjection.Field(index: val field, typeTerm: val term, isBoxed: val boxed) => { if field != 3U64 || term != 17U64 || boxed { panic("projection changed") } } _ => { panic("projection kind changed") } }
+            match value { MidRvalue.Use(operand: val operand) => { match operand { MidOperand.Copy(place: val source) => { if source.local != place.local || source.projections.count() != 1U64 { panic("operand changed") } } _ => { panic("operand kind changed") } } } _ => { panic("rvalue changed") } }
+        }
+        _ => { panic("statement order changed") }
+    }
+    index = 1U64
+    while index < 34U64 { match state.blocks[0U64].statements[index] { MidStatement.Nop => {} _ => { panic("prefix changed") } } index += 1U64 }
+    if place.projections.count() != 1U64 || state.sourceFunction != 99U64 { panic("unrelated input changed") }
+    for terminator in [<MidTerminator.Unreachable />, <MidTerminator.Return />, <MidTerminator.Switch discriminant=<MidOperand.Copy place=place /> values=[7I64] targets=[3U64] otherwise=4U64 />] {
+        state.blocks.set(i: 0U64, value: <MidBlock statements=inner terminator=terminator />)
+        midAppendStatement(state: inout state, statement: <MidStatement.Nop />)
+        if state.blocks[0U64].statements.count() != 1U64 { panic("closed block appended") }
+        match terminator {
+            MidTerminator.Unreachable => { match state.blocks[0U64].terminator { MidTerminator.Unreachable => {} _ => { panic("unreachable overwritten") } } }
+            MidTerminator.Return => { match state.blocks[0U64].terminator { MidTerminator.Return => {} _ => { panic("return overwritten") } } }
+            _ => { match state.blocks[0U64].terminator { MidTerminator.Switch(discriminant: _, values: val values, targets: val targets, otherwise: val otherwise) => { if values.count() != 1U64 || values[0U64] != 7I64 || targets[0U64] != 3U64 || otherwise != 4U64 { panic("terminator payload changed") } } _ => { panic("terminator kind changed") } } }
+        }
+    }
+}
