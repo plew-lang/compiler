@@ -346,6 +346,31 @@ pub struct ResolvedTypeDeclaration {
 }
 pub impl ResolvedTypeDeclaration { factory }
 
+// Stored head metadata, without alias/view normalization or argument traversal.
+pub struct TypeHeadShape {
+    pub val hasDecl: Bool
+    pub val declOffset: U64
+    pub val siteOffset: U64
+    pub val arity: U64
+}
+impl TypeHeadShape { factory }
+
+// A coherent snapshot of Lower's first-candidate expression navigation.
+// Only Decls constructs it; callers cannot combine unrelated rows and indices.
+pub struct AccessPlaceReader {
+    val rows: Array[AccessCandidate]
+    val byExpression: Array[U64]
+}
+impl AccessPlaceReader { factory }
+pub impl AccessPlaceReader {
+    fn placeForExpression(exprId: U64) -> Optional[U64] {
+        if exprId >= self.byExpression.count() { return <Optional.None /> }
+        val entry = self.byExpression[exprId]
+        if entry == 0U64 || entry > self.rows.count() { return <Optional.None /> }
+        return <Optional.Some v=self.rows[entry - 1U64].placeExpr />
+    }
+}
+
 // Read-only head/arity queries from one synchronized Arena snapshot. Private
 // construction prevents callers from combining unrelated name and type pools.
 pub struct TypeHeadReader {
@@ -354,6 +379,11 @@ pub struct TypeHeadReader {
 }
 impl TypeHeadReader { factory }
 pub impl TypeHeadReader {
+    fn shape(ref: U64) -> Optional[TypeHeadShape] {
+        if ref == 0U64 || ref >= self.terms.count() { return <Optional.None /> }
+        val term = self.terms[ref]
+        return <Optional.Some v=<TypeHeadShape hasDecl=term.hasDecl declOffset=term.declOffset siteOffset=term.siteOffset arity=term.args.len /> />
+    }
     fn matches(ref: U64, name: String, arity: U64) -> Bool {
         if ref >= self.terms.count() { return false }
         val term = self.terms[ref]

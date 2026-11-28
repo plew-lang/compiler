@@ -1,6 +1,10 @@
 // Lower publishes immutable access provenance. Both ExprId views navigate to
 // the first registered candidate; they do not become semantic call identities.
 pub impl Decls {
+    fn accessPlaces() -> AccessPlaceReader {
+        return <AccessPlaceReader rows=self.accessCandidateRows byExpression=self.accessCandidateByExpr />
+    }
+
     inout fn registerAccessCandidate(candidate~: AccessCandidate, expressionCount: U64) {
         if candidate.readExpr >= expressionCount || candidate.placeExpr >= expressionCount || candidate.writeExpr >= expressionCount {
             panic "access candidate expression is outside the arena"

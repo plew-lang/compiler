@@ -1,0 +1,108 @@
+// Appended inside Mid/Build so the test does not expose a private helper.
+use ../Frontend only { FrontendInput, analyzeFrontendForRequests, arrayClassifierTestFacts }
+use ../SourceAccess only { SourceAccess }
+use @Std/Io only { write }
+use ../Diag only { digitStrU }
+
+fn classifierTestQuery(c: Comp, state: MidBuildState, expression: U64) -> U64 {
+    return midDirectArrayIndexExpr(inputs: <MidArrayPlaceInputs expressions=c.arena.exprs accesses=c.decls.accessPlaces() types=c.arena.typeHeads() facts=state.sourceFacts arrayDeclaration=c.langArrayDeclOffset traceEnabled=c.traceCodegen />, exprId: expression)
+}
+
+fn classifierTestNumber(number: U64) {
+    if number >= 10U64 { classifierTestNumber(number: number / 10U64) }
+    write(s: digitStrU(d: number % 10U64))
+}
+
+fn classifierTestExpectedTrace(c: Comp, term: U64) {
+    val head = c.arena.typeTermAt(index: term)
+    write(s: "[trace-codegen] Mid array-place candidate term=")
+    classifierTestNumber(number: term)
+    write(s: " has-decl=")
+    if head.hasDecl { write(s: "1") } else { write(s: "0") }
+    write(s: " decl=")
+    classifierTestNumber(number: head.declOffset)
+    write(s: " site=")
+    classifierTestNumber(number: head.siteOffset)
+    write(s: " lang-array=")
+    classifierTestNumber(number: c.langArrayDeclOffset)
+    write(s: " args=")
+    classifierTestNumber(number: head.args.len)
+    write(s: "\n")
+}
+
+fn classifierTestMetadata() {
+    mut val c = <Comp />
+    c.decls.registerAccessCandidate(<AccessCandidate readExpr=0U64 writeExpr=1U64 placeExpr=0U64 />, expressionCount: 8U64)
+    val first = c.decls.accessPlaces()
+    if first.placeForExpression(exprId: 0U64).unwrap() != 0U64 { panic("valid place zero lost") }
+    if first.placeForExpression(exprId: 1U64).isSome() { panic("unindexed write expression accepted") }
+    c.decls.registerAccessCandidate(<AccessCandidate readExpr=0U64 writeExpr=3U64 placeExpr=2U64 />, expressionCount: 8U64)
+    c.decls.registerAccessCandidate(<AccessCandidate readExpr=6U64 writeExpr=7U64 placeExpr=4U64 />, expressionCount: 8U64)
+    val latest = c.decls.accessPlaces()
+    if latest.placeForExpression(exprId: 0U64).unwrap() != 0U64 { panic("first candidate replaced") }
+    if latest.placeForExpression(exprId: 6U64).unwrap() != 4U64 { panic("new candidate missing") }
+    if latest.placeForExpression(exprId: 5U64).isSome() || latest.placeForExpression(exprId: 8U64).isSome() { panic("hole or bounds accepted") }
+    if first.placeForExpression(exprId: 6U64).isSome() || first.placeForExpression(exprId: 2U64).isSome() { panic("access snapshot changed") }
+    c.arena.reserveTypeSentinel()
+    val scalar = c.arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] hasDecl=false declOffset=23U64 siteOffset=41U64 />, nameCount: 0U64)
+    val heads = c.arena.typeHeads()
+    val shape = heads.shape(ref: scalar).unwrap()
+    if shape.hasDecl || shape.declOffset != 23U64 || shape.siteOffset != 41U64 || shape.arity != 0U64 { panic("raw type shape normalized") }
+    val pair = c.arena.registerType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[scalar, scalar] hasDecl=true declOffset=37U64 siteOffset=43U64 />, nameCount: 0U64)
+    if heads.shape(ref: 0U64).isSome() || heads.shape(ref: pair).isSome() { panic("type snapshot bounds changed") }
+    val added = c.arena.typeHeads().shape(ref: pair).unwrap()
+    if !added.hasDecl || added.declOffset != 37U64 || added.siteOffset != 43U64 || added.arity != 2U64 { panic("type arity or identity changed") }
+}
+
+fn main() {
+    classifierTestMetadata()
+    mut val c = <Comp />
+    val text = "trait Index[Key] {{ type Output fn index(key: Key) -> Output }} struct Array[T] {{}} impl[T] Array[T] as Index[U64] {{ type Output = T fn index(key: U64) -> T {{ panic(\"unused\") }} }} fn probe(items: Array[I64], index: U64) {{ val selected: I64 = items[index] }}"
+    analyzeFrontendForRequests(c: inout c, input: <FrontendInput.Text path="array-classifier.pw" text=text />, sources: <SourceAccess stdRoot=[] />).unwrap()
+    val module = c.moduleOf(offset: c.arena.structAt(index: 0U64).defOffset)
+    c.modules.langModule = module
+    c.modules.coreModule = module
+    c.buildKwCache()
+    val owner = c.arena.firstFunctionNamed(nameId: c.internBytes(s: "probe").nameId)
+    c.prepareLexicalBody(fnIdx: owner).unwrap()
+    val facts = c.preparedFunctionSemanticFacts(fnIdx: owner).unwrap()
+    mut val state = prepareMidSourceState(c: inout c, sourceFunction: owner, facts: facts).unwrap()
+    if c.decls.accessCandidateCount() != 1U64 { panic("unexpected classifier candidate setup") }
+    val candidate = c.decls.accessCandidateAt(index: 0U64)
+    val base = match c.arena.exprs[candidate.placeExpr] {
+        Expr.Index(base: val base, index: _) => { give base }
+        _ => { panic("classifier setup is not Index") }
+    }
+    val source = facts.expression(exprId: base).unwrap()
+    val miss = c.arena.exprs.count()
+    if classifierTestQuery(c: c, state: state, expression: candidate.placeExpr) != candidate.placeExpr { panic("raw Index not direct") }
+    if classifierTestQuery(c: c, state: state, expression: candidate.readExpr) != candidate.placeExpr { panic("normalized Index not direct") }
+    if classifierTestQuery(c: c, state: state, expression: miss) != miss { panic("bounds miss changed") }
+    if classifierTestQuery(c: c, state: state, expression: base) != miss { panic("noncandidate accepted") }
+    state.sourceFacts = <Optional.None />
+    if classifierTestQuery(c: c, state: state, expression: candidate.placeExpr) != miss { panic("missing facts accepted") }
+    for status in [<SemanticExpressionTypeState.Pending />, <SemanticExpressionTypeState.Unit />, <SemanticExpressionTypeState.NoNormalValue />, <SemanticExpressionTypeState.Unrecorded />] {
+        state.sourceFacts = <Optional.Some v=arrayClassifierTestFacts(facts: facts, expression: base, state: status, term: source.term) />
+        if classifierTestQuery(c: c, state: state, expression: candidate.placeExpr) != miss { panic("nonvalue fact accepted") }
+    }
+    for term in [0U64, c.arena.typeCount()] {
+        state.sourceFacts = <Optional.Some v=arrayClassifierTestFacts(facts: facts, expression: base, state: <SemanticExpressionTypeState.Value />, term: term) />
+        if classifierTestQuery(c: c, state: state, expression: candidate.placeExpr) != miss { panic("invalid type term accepted") }
+    }
+    val declaration = c.arena.typeTermAt(index: source.term).declOffset
+    for shape in [<TypeRef nameStart=0U64 nameLen=0U64 args=[source.term] hasDecl=false declOffset=declaration />, <TypeRef nameStart=0U64 nameLen=0U64 args=[] hasDecl=true declOffset=declaration />, <TypeRef nameStart=0U64 nameLen=0U64 args=[source.term, source.term] hasDecl=true declOffset=declaration />, <TypeRef nameStart=0U64 nameLen=0U64 args=[source.term] hasDecl=true declOffset=declaration + 1U64 />] {
+        val term = c.arena.registerType(t: shape, nameCount: 0U64)
+        state.sourceFacts = <Optional.Some v=arrayClassifierTestFacts(facts: facts, expression: base, state: <SemanticExpressionTypeState.Value />, term: term) />
+        if classifierTestQuery(c: c, state: state, expression: candidate.placeExpr) != miss { panic("non Array shape accepted") }
+    }
+    state.sourceFacts = <Optional.Some v=facts />
+    c.traceCodegen = true
+    if classifierTestQuery(c: c, state: state, expression: candidate.readExpr) != candidate.placeExpr { panic("trace changed classification") }
+    classifierTestExpectedTrace(c: c, term: source.term)
+    c.langArrayDeclOffset = 0U64
+    if classifierTestQuery(c: c, state: state, expression: candidate.placeExpr) != miss { panic("missing Array identity accepted") }
+    classifierTestExpectedTrace(c: c, term: source.term)
+    c.langArrayDeclOffset = c.arena.typeTermAt(index: source.term).declOffset + 1U64
+    if classifierTestQuery(c: c, state: state, expression: candidate.placeExpr) != miss { panic("different Array identity accepted") }
+    classifierTestExpectedTrace(c: c, term: source.term)
+}

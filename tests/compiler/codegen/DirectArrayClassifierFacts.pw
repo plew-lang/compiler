@@ -1,0 +1,15 @@
+// Test-only issuer appended to the Frontend module in an isolated snapshot.
+// Its expression-only payload retains the body/session and index identity.
+// No other PreparedSemanticFacts reader is used by this probe.
+pub fn arrayClassifierTestFacts(facts: PreparedSemanticFacts, expression: U64, state: SemanticExpressionTypeState, term: U64) -> PreparedSemanticFacts {
+    mut val data = <SourceBodyData owner=facts.owner expressions=facts.payload->expressions expressionIds=facts.payload->expressionIds expressionIndexSlots=facts.payload->expressionIndexSlots />
+    mut val index = 0U64
+    while index < data.expressionIds.count() {
+        if data.expressionIds[index] == expression {
+            data.expressions.set(i: index, value: <SemanticExprType typeState=state term=term />)
+            return <PreparedSemanticFacts readerIndex=facts.readerIndex session=facts.session owner=facts.owner payload=<Ref value=data /> />
+        }
+        index += 1U64
+    }
+    panic("classifier test expression missing")
+}
