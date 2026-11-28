@@ -297,7 +297,7 @@ pub impl Comp {
                 try self.checkSourceMethodVisibility(exprId: exprId, receiverTerm: template.receiverTypeTerm, function: function)
                 try self.verifySelectedMethodReceiverWithOrigin(recv: recv, function: function, args: args, origin: <Optional.Some v=index />)
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
-                try self.checkSelectedMethodArguments(exprId: exprId, function: function, environment: environment, args: args)
+                try self.checkSelectedMethodArguments(callee: callee, environment: environment, args: args)
                 self.recordResolvedMethodCallee(id: exprId, callee: callee)
             }
             CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: val resolution, methodTypeArgs: _, resultTerm: _) => {

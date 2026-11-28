@@ -1,7 +1,7 @@
 ---
 id: met-wxn1
 status: in_progress
-deps: [met-4dxy]
+deps: [met-4dxy, met-y2ec]
 links: []
 created: 2026-11-27T15:58:48Z
 type: task
@@ -427,3 +427,33 @@ samples retain identical LLVM; old/new medians are 8.124098/8.102937s. This is n
 a material recovery claim. Formal latest 8bec5272 is 8.073688s at G3 fixed point,
 above 7.5s. The task remains in progress; neither candidate nor completion is
 adopted. Further functional and cost work is required.
+
+Actual frame-preserved diagnostic stacks identify two remaining raw readers.
+Final method argument verification passed original Param.ty directly to grounding;
+it now takes selected callee identity and uses the same admitted parameter reader
+as source-call closure, preserving labels and inout validation. The ordinary
+static expected-result fixture changes from refusal to success (v19).
+
+Provided placement candidates retained canonical lexicalOwnerFnId but the lexical
+reader queried the copy's signature map. The reader now uses semanticBodyOwner,
+validates original slot identity and reads the symbolic source recipe before the
+candidate receiver substitution. Direct placement-reader RED/GREEN asserts that
+raw Child stays authored while the copy publishes Parent; the copy itself has no
+independent receipt. v20 removes the late Child lookup. Provided Parent/Child
+controls both still fail expected-result inference; FactoryError caller and the
+separate met-2yhf refusals remain. Independent limited source review found no
+guard weakening. This checkpoint does not close the task.
+
+Generic recorded direct-call argument checking had the same raw Param.ty read.
+It now consumes selectedDirectParameterSignature/sourceCallArgumentType once per
+call; v24 resolves FactoryError Parent/Child caller cases. Component22, including
+the new direct placement-reader test, passes. Provided expected-result patterns
+retain method binders until shared rigid-boundary matching; v27 passes every
+normal whole-check fixture while preserving the two met-2yhf diagnostic failures.
+
+Completion remains unproven: receiver/impl substitutions already inserted into a
+provided pattern may contain caller-owned method ParamIds in recursive calls.
+Review identifies this possible loss of original-node boundaries. A dedicated
+recursive Source fixture is being checked before finalizing that representation.
+The isolated canonical-readers build uses an earlier frozen source, not these
+later Generic/provided changes; do not confuse it with a final candidate.

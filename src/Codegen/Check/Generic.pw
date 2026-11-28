@@ -949,12 +949,13 @@ impl Comp {
                 if callee >= self.arena.functionCount() { return <Result.Ok value=() /> }
                 val function = self.arena.functionAt(index: callee)
                 val environment = try self.recordedDirectCallEnvironment(function: function, receiverTerm: template.receiverTypeTerm, typeArgs: self.callTemplateTypeArgs(range: typeArgs), proof: self.thawStaticConformanceProof(id: proofId))
+                val signature = try self.selectedDirectParameterSignature(callee: callee, environment: environment)
                 mut val argumentIndex = 0U64
                 while argumentIndex < args.len {
                     val parameterIndex = self.paramIndexForArg(params: function.params, args: args, argIdx: argumentIndex)
                     if parameterIndex < function.params.count() {
                         val parameter = self.funcParamAt(params: function.params, index: parameterIndex)
-                        val expected = try self.groundTermForBody(ref: parameter.ty, environment: environment, selfRef: environment.receiverRef, itemRef: 0U64)
+                        val expected = try self.sourceCallArgumentType(parameter: parameter, position: parameterIndex, signature: signature)
                         try self.checkGenericTypeMatchWithOrigin(origin: origin, expectedRef: expected, valueExpr: self.argAt(args: args, index: argumentIndex).expr)
                     }
                     argumentIndex += 1U64

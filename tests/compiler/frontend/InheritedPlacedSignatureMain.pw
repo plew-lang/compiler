@@ -1,0 +1,26 @@
+// Append to Frontend: placements must read the canonical source signature.
+fn main() {
+    mut val compiler = <Comp />
+    match analyzeFrontendForRequests(c: inout compiler, input: <FrontendInput.File path="tests/compiler/frontend/fixtures/ProjectionMembers/ExecutableProvidedExpectedResult.pw" />, sources: <SourceAccess stdRoot="std/".bytes() />) {
+        Result.Ok(value: _) => {}
+        Result.Err(error: val diagnostic) => { panic("placement setup: "+diagnostic.message()) }
+    }
+    val build = compiler.internBytes(s: "build").nameId
+    val parent = compiler.internBytes(s: "Parent").nameId
+    val child = compiler.internBytes(s: "Child").nameId
+    mut val found = false
+    for index in 0U64..<compiler.arena.functionCount() {
+        val function = compiler.arena.functionAt(index: index)
+        if function.nameId == build && function.isProvided {
+            val owner = compiler.semanticBodyOwner(fnIdx: index).unwrap()
+            if owner == index || !compiler.authoredSignatureViews.contains(key: owner) { panic("placement has no distinct admitted source owner") }
+            if compiler.authoredSignatureViews.contains(key: index) { panic("placement unexpectedly owns an independent source signature") }
+            val parameter = compiler.funcParamAt(params: function.params, index: 1U64)
+            if compiler.arena.typeAt(index: parameter.ty).assocTraitId != child { panic("placement overwrote its authored parameter") }
+            val result = compiler.lexicalBodyParameterType(function: index, index: 1U64, ref: parameter.ty, receiver: function.recvTy).unwrap()
+            if result.isNone() || compiler.arena.typeAt(index: result.unwrap()).assocTraitId != parent { panic("placement parameter did not use its retained declaring Parent") }
+            found = true
+        }
+    }
+    if !found { panic("placement source reader was not exercised") }
+}

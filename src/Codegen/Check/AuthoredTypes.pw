@@ -905,7 +905,9 @@ impl Comp {
 
     inout fn lexicalBodySignatureType(function: U64, slot: SourceSignatureSlot, ref: U64, receiver: U64) -> Result[Optional[U64], CompileDiagnostic] {
         if !self.arena.typeContainsAssociatedProjection(ref: ref) { return <Result.Ok value=<Optional.None /> /> }
-        val admitted = match self.authoredSignatureViews.get(key: function) {
+        val selected = self.arena.functionAt(index: function)
+        val owner = if selected.isProvided { give try self.semanticBodyOwner(fnIdx: function) } else { give function }
+        val admitted = match self.authoredSignatureViews.get(key: owner) {
             Optional.Some(v: val admitted) => admitted,
             Optional.None => { return <Result.Ok value=<Optional.None /> /> },
         }
@@ -919,10 +921,12 @@ impl Comp {
             SourceSignatureSlot.FactoryError => source.factoryError
         }
         if occurrenceId == 0U64 { return <Result.Ok value=<Optional.None /> /> }
-        val declaration = self.arena.functionAt(index: function)
-        if declaration.typeParams.count() != 0U64 || !self.arena.typeIsClosed(ref: receiver) {
+        val declaration = self.arena.functionAt(index: owner)
+        // A placement shares its source slots, not a concrete source-body
+        // environment. Its caller applies the selected receiver substitution.
+        if owner != function || declaration.typeParams.count() != 0U64 || !self.arena.typeIsClosed(ref: receiver) {
             val occurrence = try self.authoredSignatureOccurrence(signature: source, id: occurrenceId)
-            if source.function != function || !self.typeRefEq(a: occurrence.term, b: ref) {
+            if source.function != owner || !self.typeRefEq(a: occurrence.term, b: ref) {
                 return <Result.Err error=self.diagnosticAt(offset: occurrence.site, msg: "lexical body type has a foreign signature slot", failureDomain: <FailureDomain.Internal />) />
             }
             mut val memo: Dictionary[U64, AuthoredRecipeRead] = [:]
@@ -930,7 +934,7 @@ impl Comp {
             return <Result.Ok value=<Optional.Some v=read.term /> />
         }
         val environment = <InstanceEnvironment receiverRef=receiver />
-        val term = try self.readAdmittedSignatureRoot(function: function, slot: slot, environment: environment)
+        val term = try self.readAdmittedSignatureRoot(function: owner, slot: slot, environment: environment)
         return <Result.Ok value=<Optional.Some v=term /> />
     }
 

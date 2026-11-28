@@ -2005,16 +2005,14 @@ impl Comp {
                 val proof = self.thawStaticConformanceProof(id: proofId)
                 val provided = function.isProvided && self.isAuthoredProvidedDeclaration(function: callee)
                 mut val rigidPatternTerms: Dictionary[U64, U64] = [:]
+                val patternReceiver = if provided { give self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: current) } else { give self.parametricSelfRef(f: function) }
                 val resultPattern = if provided {
-                    val selectedReceiver = self.selectedCallableReceiver(function: function, receiver: receiver, receiverTerm: receiverTerm, params: self.copyFuncBinds(binds: function.typeParams), typeArgs: current)
-                    give try self.providedExpectedResultPattern(callee: callee, receiver: selectedReceiver, arguments: current, proof: proof)
+                    give try self.providedExpectedResultPattern(callee: callee, receiver: patternReceiver, proof: proof)
                 } else {
-                    val receiver = self.parametricSelfRef(f: function)
                     val declaration = try self.lexicalCallableResultType(function: callee)
-                    val pattern = self.groundTermInEnvironment(ref: declaration, params: [], values: [], selfRef: receiver)
-                    try self.prepareResultPatternBoundaries(ref: pattern, params: function.typeParams, known: current, receiver: receiver, rigidPatternTerms: inout rigidPatternTerms)
-                    give pattern
+                    give self.groundTermInEnvironment(ref: declaration, params: [], values: [], selfRef: patternReceiver)
                 }
+                try self.prepareResultPatternBoundaries(ref: resultPattern, params: function.typeParams, known: current, receiver: patternReceiver, rigidPatternTerms: inout rigidPatternTerms)
                 val boundaries: Optional[Dictionary[U64, U64]] = if rigidPatternTerms.count() == 0U64 { give <Optional.None /> } else { give <Optional.Some v=rigidPatternTerms /> }
                 val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: resultPattern, expectedTerm: expectedTerm, rigidPatternTerms: boundaries)
                 if completed.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: completed) { return <Result.Ok value=<Optional.None /> /> }
@@ -2043,6 +2041,7 @@ impl Comp {
                 if function.typeParams.count() == 0U64 || (current.count() == function.typeParams.count() && self.fnArgsAllResolved(args: current)) { return <Result.Ok value=<Optional.None /> /> }
                 mut val pattern = 0U64
                 mut val proof = <StaticConformanceProof.Missing />
+                mut val rigidPatternTerms: Dictionary[U64, U64] = [:]
                 match resolution {
                     StaticMemberResolution.Requirement(proof: val selectedProof, traitIdx: _, reqIdx: _) => {
                         pattern = try self.staticRequirementResultType(resolution: resolution)
@@ -2050,17 +2049,19 @@ impl Comp {
                     }
                     StaticMemberResolution.Provided(proof: val selectedProof, traitIdx: _, callee: val callee) => {
                         if self.isAuthoredProvidedDeclaration(function: callee) {
-                            pattern = try self.providedExpectedResultPattern(callee: callee, receiver: receiverTerm, arguments: current, proof: selectedProof)
+                            pattern = try self.providedExpectedResultPattern(callee: callee, receiver: receiverTerm, proof: selectedProof)
                         } else {
                             val lexical = try self.withLexicalSelfBinding(f: function, environment: <InstanceEnvironment receiverRef=receiverTerm proof=selectedProof />)
                             val declaration = try self.lexicalCallableResultType(function: callee)
                             pattern = self.groundTermInEnvironment(ref: declaration, params: lexical.params, values: lexical.args, selfRef: receiverTerm)
                         }
+                        try self.prepareResultPatternBoundaries(ref: pattern, params: function.typeParams, known: current, receiver: receiverTerm, rigidPatternTerms: inout rigidPatternTerms)
                         proof = selectedProof
                     }
                     StaticMemberResolution.Missing => { return <Result.Ok value=<Optional.None /> /> }
                 }
-                val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: pattern, expectedTerm: expectedTerm)
+                val boundaries: Optional[Dictionary[U64, U64]] = if rigidPatternTerms.count() == 0U64 { give <Optional.None /> } else { give <Optional.Some v=rigidPatternTerms /> }
+                val completed = self.completeCallTypeArguments(function: function, current: current, resultPattern: pattern, expectedTerm: expectedTerm, rigidPatternTerms: boundaries)
                 if completed.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: completed) { return <Result.Ok value=<Optional.None /> /> }
                 val environment = <InstanceEnvironment params=self.copyFuncBinds(binds: function.typeParams) args=completed receiverRef=receiverTerm proof=proof />
                 val provided = match resolution {
@@ -2110,12 +2111,13 @@ pub impl Comp {
         }
     }
 
-    inout fn providedExpectedResultPattern(callee: U64, receiver: U64, arguments: Array[U64], proof: StaticConformanceProof) -> Result[U64, CompileDiagnostic] {
+    inout fn providedExpectedResultPattern(callee: U64, receiver: U64, proof: StaticConformanceProof) -> Result[U64, CompileDiagnostic] {
         if receiver == 0U64 { return <Result.Ok value=0U64 /> }
         val declaration = self.arena.functionAt(index: callee)
-        mut val slots = arguments
-        while slots.count() < declaration.typeParams.count() { slots.append(0U64) }
-        val environment = try self.recordedDirectCallEnvironment(function: declaration, receiverTerm: receiver, typeArgs: slots, proof: proof)
+        // Receiver/impl bindings are fixed; method-owned binders remain in
+        // the original pattern until the shared rigid-boundary matcher.
+        val partial = try self.methodReceiverSignatureEnvironment(f: declaration, semanticReceiver: receiver, selectedProof: proof)
+        val environment = try self.withLexicalSelfBinding(f: declaration, environment: partial)
         return <Result.Ok value=(try self.providedSourceSignature(function: callee, environment: environment, read: <CallableSignatureRead.SourceResult />)).resultType />
     }
 
