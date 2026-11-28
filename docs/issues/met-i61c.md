@@ -1,6 +1,6 @@
 ---
 id: met-i61c
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-28T12:50:36Z
@@ -18,3 +18,8 @@ Investigate verifyCanonicalMidFlagInitialization on the current frozen selfcompi
 
 Record measured applicability and cost evidence. TDD empty domain, valid nonempty flags, uninitialized/invalid flag operations, unreachable operations and malformed targets; preserve diagnostics and output. No compiler-specific exemption and no bypass based only on missing local flags. Compare uninstrumented same-source LLVM/time and resources; independent review before completion. Distinguish gain from noise; do not claim sub-7 success from this bounded task alone.
 
+## Current evidence and finite scenarios
+
+Measured current fixed target: 26,973 flag checks, all with empty domains; 620,262 empty per-block vectors and 4,764,427 statement visits, zero flag operations. Counter diagnostic is LLVM22/O0, not a timing claim. New fixture mid_drop_flag_empty_domain is GREEN before and after: empty success, reachable invalid Set/ConditionalDrop, unreachable invalid Set, malformed edge, nonempty initialized flag and uninitialized ConditionalDrop. Existing mid_drop_flag_initialization covers joins/backedges. Independent source/test review found no required correction; native build and real timing remain pending.
+
+After diagnostic: all 26,973 checks use the fast path; vectors 620,262→0 and fixed-point visits 4,764,427→0, replaced by 1,244,929 presence checks. Native controls are GREEN with unchanged inputs; next optimized snapshot is tmp/performance-empty-flags/compiler. Standard suite for met-b775 holds the validation lock, so next build is queued rather than launched concurrently.

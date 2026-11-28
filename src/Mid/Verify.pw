@@ -394,6 +394,24 @@ fn canonicalMidSamePlace(arena: MidCanonicalArena, leftId: U64, rightId: U64) ->
     return true
 }
 
+// An empty flag domain has no initialization obligation only when the body
+// also has no flag operation. Keep malformed flag operations on the ordinary
+// path, including its existing reachable/unreachable diagnostic behavior.
+fn canonicalMidHasFlagOperations(arena: MidCanonicalArena, body: MidBodyNode) -> Bool {
+    mut val block = 0U64
+    while block < body.blocks.len {
+        val node = arena.blocks[body.blocks.start + block]
+        mut val statement = 0U64
+        while statement < node.statements.len {
+            val operation = arena.statements[node.statements.start + statement]
+            if operation.tag == 4U64 || operation.tag == 5U64 { return true }
+            statement += 1U64
+        }
+        block += 1U64
+    }
+    return false
+}
+
 fn verifyCanonicalMidFlagInitialization(arena: MidCanonicalArena, canonical: MidCanonicalBody) -> MidVerification {
     if canonical.body == 0U64 || canonical.body > arena.bodies.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
     val body: MidBodyNode = arena.bodies[canonical.body - 1U64]
@@ -404,6 +422,8 @@ fn verifyCanonicalMidFlagInitialization(arena: MidCanonicalArena, canonical: Mid
         local = local + 1U64
     }
     if body.entry >= body.blocks.len { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
+    // The caller already checked canonical row/range/edge well-formedness.
+    if flags.count() == 0U64 && !canonicalMidHasFlagOperations(arena: arena, body: body) { return <MidVerification /> }
     mut val incoming: Array[Array[Bool]] = []
     mut val reachable: Array[Bool] = []
     mut val blockI: U64 = 0U64

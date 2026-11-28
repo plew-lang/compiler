@@ -1,0 +1,33 @@
+// Empty flag domains do not exempt malformed or reachable flag operations.
+use /Frontend only { Comp }
+use /Mid/Ir only { MidPlace, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
+use /Mid/Verify only { MidVerifyError, verifyCanonicalMidBody }
+use @Std/Io only { print }
+
+fn check(body: MidBody, expected: U64) {
+    mut val c = <Comp />
+    val canonical = c.mid.store(body: body)
+    val actual = match verifyCanonicalMidBody(c: inout c, canonical: canonical).error {
+        MidVerifyError.None => { give 0U64 }
+        MidVerifyError.InvalidDropFlag => { give 1U64 }
+        MidVerifyError.InvalidTarget => { give 2U64 }
+        MidVerifyError.UninitializedDropFlag => { give 3U64 }
+        _ => { give 4U64 }
+    }
+    if actual != expected { panic("empty flag domain changed diagnosis") }
+}
+
+fn main() {
+    val local = <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />
+    val flag = <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isDropFlag=true />
+    val set = <MidStatement.SetDropFlag local=0U64 isSet=false />
+    val conditional = <MidStatement.ConditionalDrop place=<MidPlace local=0U64 /> flag=0U64 />
+    check(body: <MidBody blocks=[<MidBlock terminator=<MidTerminator.Return /> />] />, expected: 0U64)
+    check(body: <MidBody locals=[local] blocks=[<MidBlock statements=[set] terminator=<MidTerminator.Return /> />] />, expected: 1U64)
+    check(body: <MidBody locals=[local] blocks=[<MidBlock statements=[conditional] terminator=<MidTerminator.Return /> />] />, expected: 1U64)
+    check(body: <MidBody locals=[local] blocks=[<MidBlock terminator=<MidTerminator.Return /> />, <MidBlock statements=[set] terminator=<MidTerminator.Return /> />] />, expected: 0U64)
+    check(body: <MidBody blocks=[<MidBlock terminator=<MidTerminator.Goto target=7U64 /> />] />, expected: 2U64)
+    check(body: <MidBody locals=[flag] blocks=[<MidBlock statements=[set] terminator=<MidTerminator.Return /> />] />, expected: 0U64)
+    check(body: <MidBody locals=[flag] blocks=[<MidBlock statements=[conditional] terminator=<MidTerminator.Return /> />] />, expected: 3U64)
+    print("ok")
+}
