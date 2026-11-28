@@ -477,10 +477,27 @@ meta scratch `tmp/performance-recovery-current/cpu-profile-authorized` and
 completion and Mid construction appear in that interval; this is not a
 whole-run attribution or exact percentage claim.
 
-The next bounded experiment delays `parametricSelfRef` in
-`callableParameterPatterns` until the first associated projection. Existing
-nonprojection reads return before consuming this receiver, so the experiment
-removes unused preparation without changing admission failure checks. Frozen
-source: `tmp/performance-recovery-lazy-pattern/compiler`; build
-`20261128T044837-build-3e1831` is pending. Production source remains unchanged
-by either performance experiment. No recovery claim or task closure.
+The lazy parametric-receiver experiment also showed no material recovery
+(8.095831s before / 8.114948s after) and is not adopted.
+
+On the same latest source, adopted149aac and the current candidate give
+7.437584s and 8.048875s respectively (three alternating pairs). The major
+phase difference is function/declaration checking before declaration Mid
+construction. Removing only receiver-term IDs in generated method symbol
+names yields zero differing LLVM lines for the first pair, not raw equality.
+
+Recipe-header optimization0863e52b changes TypeRef materialization to the
+existing TypeTerm reader without removing admission, slot or proof checks.
+Build20261128T050405-build-284e87 passed. Warm alternating pairs give
+8.117768s / 8.069929s, all LLVM equal and inputs unchanged. Independent review
+plus native admission controls and 24 associated/selection/reader profiles
+pass. Detailed evidence is under the meta performance-recovery directory.
+The source-level recipe contract excludes direct Raw Arena projections lacking
+a stored receiver; normal Comp.pushType producers normalize that representation.
+
+The 7.5s cap remains unmet, ordinary implementation remains suspended, and no
+hard-to-repair judgment has been made. Next, count repeated signature reads
+under the same exact admitted context/environment and assess scoped retained
+results against the existing saved-evidence contract. Preserve all refusal and
+proof authority checks; do not add a cache keyed only by printed names or
+receiver shape. No task closure or compiler adoption is claimed.
