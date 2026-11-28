@@ -1012,12 +1012,12 @@ impl Comp {
             reads.append(read)
             for equation in read.normalizations { try self.appendRetainedProjectionEquation(step: equation, normalizations: inout normalizations) }
         }
-        val original = self.arena.typeAt(index: node.term)
+        val original = self.arena.typeTermAt(index: node.term)
         val rebuilt = self.rebuildTypeTermChildren(ref: node.term, children: children)
         // Keep selector positions before normalization/replacement. Their
         // original nodes select the saved proof; these terms only instantiate it.
         mut val viewArguments: Array[U64] = []
-        val ordinary = if original.isRecord { give original.recordFieldTerms.count() } else { give original.args.count() + original.assocTraitArgs.count() }
+        val ordinary = if original.isRecord { give original.recordFieldTerms.len } else { give original.args.len + original.assocTraitArgs.len }
         if original.assocNameId == 0U64 {
             mut val index = ordinary
             while index < children.count() {
@@ -1041,7 +1041,7 @@ impl Comp {
         match node.origin {
             SourceTypeRecipeOrigin.Authored => {
                 val occurrence = self.sourceTypeUses.useAt(index: node.occurrence - 1U64).unwrap()
-                val originalReceiver = if original.assocNameId == 0U64 { give node.term } else { give self.typeTermProjectionReceiver(t: original) }
+                val originalReceiver = if original.assocNameId == 0U64 { give node.term } else { give self.typeTermRefProjectionReceiver(ref: node.term) }
                 val receiver = if original.assocNameId == 0U64 { give term } else { give children[0U64] }
                 val selectors = self.arena.typeViewSources(ref: originalReceiver)
                 mut val proofEquations = normalizations
@@ -1063,11 +1063,11 @@ impl Comp {
                     mut val owner = if original.assocTraitDeclOffset != 0U64 { give original.assocTraitDeclOffset } else { give original.assocTraitStart }
                     mut val arguments: Array[U64] = []
                     index = 1U64
-                    while index <= original.assocTraitArgs.count() {
+                    while index <= original.assocTraitArgs.len {
                         arguments.append(children[index])
                         index += 1U64
                     }
-                    mut val selector = <ResolvedViewSource writtenStart=occurrence.site surfaceId=original.assocTraitId traitInstance=<TraitInstanceKey owner=owner positionalArgs=original.assocTraitArgs /> />
+                    mut val selector = <ResolvedViewSource writtenStart=occurrence.site surfaceId=original.assocTraitId traitInstance=<TraitInstanceKey owner=owner positionalArgs=self.arena.typeAt(index: node.term).assocTraitArgs /> />
                     val saved = try self.signatureOccurrenceView(proofs: proofs, occurrence: node.occurrence, selector: selector, offset: occurrence.site)
                     val lexicalEquations = try self.readSignatureLexicalEquations(selected: saved, environment: environment, offset: occurrence.site)
                     if lexicalEquations.count() != 0U64 {
